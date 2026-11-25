@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kota &amp; Kampus Hanyu: Misi Sehari-hari (Edisi Lengkap)</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --surface: #ffffff;
+      --surface-alt: #ebf1f8;
+      --ink: #141e30;
+      --muted: #4b5a73;
+      --primary: #1d4ed8;
+      --primary-dark: #1e3a8a;
+      --primary-soft: #dbeafe;
+      --accent: #0f766e;
+      --accent-soft: #ccfbf1;
+      --warn: #b45309;
+      --warn-soft: #fef3c7;
+      --danger: #b91c1c;
+      --danger-soft: #fee2e2;
+      --border: #d5dfec;
+      --radius: 14px;
+      --shadow: 0 8px 24px rgba(20, 30, 48, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.52;
+    }
+
+    .app-shell {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 16px 16px 56px;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      letter-spacing: -0.01em;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .stat-pill {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tab-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover { border-color: var(--primary); }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .mentor-box {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: linear-gradient(135deg, #eff6ff 0%, #f0fdfa 100%);
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 13px 15px;
+      margin-bottom: 16px;
+    }
+
+    .mentor-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .mentor-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--primary-dark);
+      margin-bottom: 2px;
+    }
+
+    .mentor-text {
+      margin: 0;
+      font-size: 0.92rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+
+    .chapter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .chapter-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .chapter-card h3 {
+      margin: 4px 0 4px;
+      font-size: 0.98rem;
+    }
+
+    .chapter-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+    }
+
+    .tag.ok { background: var(--accent-soft); color: var(--accent); border-color: #99f6e4; }
+    .tag.warn { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+    .tag.boss { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-outline {
+      background: var(--surface);
+      color: var(--ink);
+      border-color: var(--border);
+    }
+    .btn-outline:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+    .btn-sm { padding: 6px 11px; font-size: 0.81rem; }
+
+    .mission-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dialogue-box {
+      background: #f8fafd;
+      border-left: 4px solid var(--primary);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 10px 0;
+    }
+
+    .dialogue-turn {
+      margin-bottom: 8px;
+    }
+    .dialogue-turn:last-child { margin-bottom: 0; }
+
+    .speaker-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .hanzi-display {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 6px 0 2px;
+      color: var(--ink);
+    }
+
+    .pinyin-display {
+      font-size: 0.94rem;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .meaning-display {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .options-list {
+      display: grid;
+      gap: 9px;
+      margin: 14px 0;
+    }
+
+    .option-btn {
+      text-align: left;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 0.91rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .option-btn:hover:not(:disabled) {
+      border-color: var(--primary);
+      background: #f8fbff;
+    }
+
+    .option-btn.selected {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      font-weight: 600;
+    }
+
+    .builder-pool, .builder-target {
+      min-height: 52px;
+      border: 1px dashed #9fb0cc;
+      border-radius: 10px;
+      padding: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--surface-alt);
+      margin: 10px 0;
+    }
+
+    .builder-target {
+      border-style: solid;
+      background: #f8fbff;
+    }
+
+    .token-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .token-chip:hover { border-color: var(--primary); }
+
+    .feedback-box {
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 12px;
+      font-size: 0.89rem;
+    }
+
+    .feedback-box.ok {
+      background: var(--accent-soft);
+      border: 1px solid #5eead4;
+      color: #115e59;
+    }
+
+    .feedback-box.err {
+      background: var(--danger-soft);
+      border: 1px solid #fca5a5;
+      color: #7f1d1d;
+    }
+
+    .feedback-box.hint {
+      background: var(--warn-soft);
+      border: 1px solid #fcd34d;
+      color: #78350f;
+    }
+
+    .speaking-panel {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .audio-status {
+      font-size: 0.84rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .vocab-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    .vocab-table th, .vocab-table td {
+      border-bottom: 1px solid var(--border);
+      padding: 9px 10px;
+      text-align: left;
+    }
+
+    .vocab-table th {
+      background: var(--surface-alt);
+      font-weight: 700;
+    }
+
+    .review-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: var(--surface);
+    }
+
+    .progress-bar-wrap {
+      height: 8px;
+      background: var(--surface-alt);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.25s ease;
+    }
+
+    .mode-switch {
+      display: inline-flex;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .mode-chip {
+      border: none;
+      background: transparent;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .mode-chip.active {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 210px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 600px) {
+      .hanzi-display { font-size: 1.28rem; }
+      .topbar { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Kota &amp; Kampus Hanyu: Misi Sehari-hari</h1>
+        <p>Edisi Lengkap • Menyimak, Tata Bahasa, Roleplay Dialog &amp; Speaking Lab</p>
+      </div>
+      <div class="stats-row" id="statsBar"></div>
+    </header>
+
+    <nav class="nav-tabs" aria-label="Navigasi Utama">
+      <button class="tab-btn active" data-tab="peta" onclick="switchTab('peta')">Peta 7 Bab</button>
+      <button class="tab-btn" data-tab="misi" onclick="switchTab('misi')">Ruang Misi</button>
+      <button class="tab-btn" data-tab="kamus" onclick="switchTab('kamus')">Kamus &amp; Pola</button>
+      <button class="tab-btn" data-tab="ulang" onclick="switchTab('ulang')">Perlu Diulang <span id="reviewCountBadge"></span></button>
+      <button class="tab-btn" data-tab="profil" onclick="switchTab('profil')">Profil &amp; Lencana</button>
+    </nav>
+
+    <section class="mentor-box">
+      <div class="mentor-avatar">林</div>
+      <div>
+        <div class="mentor-name">Lǎoshī Lín (老师林)</div>
+        <p class="mentor-text" id="mentorMsg">
+          Halo Rafi! Ini versi lengkap 7 bab dari dasar pelafalan sampai simulasi situasi nyata. Jangan lupa aktifkan audio untuk latihan listening &amp; speaking di setiap bab!
+        </p>
+      </div>
+    </section>
+
+    <main id="mainContent"></main>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "hanyu_kota_kampus_complete_v2";
+
+    const VOCAB_BANK = [
+      { ch: "Bab 1", hanzi: "你好 / 您好", pinyin: "nǐ hǎo / nín hǎo", meaning: "Halo (teman / sopan)", note: "你好 dilafalkan ní hǎo (三声变调)." },
+      { ch: "Bab 1", hanzi: "早上好 / 下午好 / 晚上好", pinyin: "zǎoshang / xiàwǔ / wǎnshang hǎo", meaning: "Selamat pagi / siang-sore / malam", note: "Sapaan berdasarkan waktu hari." },
+      { ch: "Bab 1", hanzi: "谢谢 / 不客气", pinyin: "xièxie / bú kèqi", meaning: "Terima kasih / Sama-sama", note: "不 berubah nada ke-2 (bú) sebelum nada ke-4." },
+      { ch: "Bab 1", hanzi: "对不起 / 没关系", pinyin: "duìbuqǐ / méi guānxi", meaning: "Maaf / Tidak apa-apa", note: "Pasangan ungkapan meminta dan memberi maaf." },
+      { ch: "Bab 1", hanzi: "姓 / 叫 / 哪国人", pinyin: "xìng / jiào / nǎ guó rén", meaning: "Bermarga / bernama / orang negara mana", note: "请问您贵姓？ = Permisi, marga Anda siapa?" },
+      { ch: "Bab 1", hanzi: "认识你很高兴", pinyin: "rènshi nǐ hěn gāoxìng", meaning: "Senang berkenalan denganmu", note: "Ungkapan standar setelah perkenalan." },
+
+      { ch: "Bab 2", hanzi: "这 / 那 / 什么 / 谁", pinyin: "zhè / nà / shénme / shéi", meaning: "Ini / itu / apa / siapa", note: "Kata tunjuk dan kata tanya dasar." },
+      { ch: "Bab 2", hanzi: "本 / 个 / 口 / 位", pinyin: "běn / gè / kǒu / wèi", meaning: "Satuan buku / umum / anggota keluarga / orang (sopan)", note: "三本词典, 四口人, 一位老师." },
+      { ch: "Bab 2", hanzi: "几 / 多少", pinyin: "jǐ / duōshao", meaning: "Berapa (<10) / berapa (umum/banyak)", note: "你们班有多少人？" },
+      { ch: "Bab 2", hanzi: "有 / 没有", pinyin: "yǒu / méiyǒu", meaning: "Punya (ada) / tidak punya (tidak ada)", note: "Penyangkalan 有 selalu pakai 没, bukan 不." },
+
+      { ch: "Bab 3", hanzi: "多少钱 / 块(元) / 毛 / 分", pinyin: "duōshao qián / kuài (yuán) / máo / fēn", meaning: "Berapa harganya / satuan mata uang RMB", note: "1 块 = 10 毛; 块 untuk lisan, 元 untuk tulisan." },
+      { ch: "Bab 3", hanzi: "一斤 / 瓶 / 份", pinyin: "yì jīn / píng / fèn", meaning: "Setengah kg (500g) / botol / porsi", note: "苹果多少钱一斤？" },
+      { ch: "Bab 3", hanzi: "月 / 号(日) / 星期", pinyin: "yuè / hào (rì) / xīngqī", meaning: "Bulan / tanggal / hari dalam pekan", note: "Urutan: Bulan dulu lalu Tanggal (六月五号)." },
+      { ch: "Bab 3", hanzi: "点 / 分 / 半 / 刻 / 差", pinyin: "diǎn / fēn / bàn / kè / chà", meaning: "Jam / menit / setengah / 15 menit / kurang", note: "差一刻八点 = jam 8 kurang 15 menit (07:45)." },
+
+      { ch: "Bab 4", hanzi: "前边 / 后边 / 旁边 / 对面", pinyin: "qiánbiān / hòubiān / pángbiān / duìmiàn", meaning: "Depan / belakang / samping / seberang", note: "银行在超市旁边。" },
+      { ch: "Bab 4", hanzi: "东边 / 西边 / 南边 / 北边", pinyin: "dōngbiān / xībiān / nánbiān / běibiān", meaning: "Timur / barat / selatan / utara", note: "Arah mata angin." },
+      { ch: "Bab 4", hanzi: "从……到……", pinyin: "cóng ... dào ...", meaning: "Dari ... sampai ...", note: "从学校到车站很近。" },
+      { ch: "Bab 4", hanzi: "还是 / 或者", pinyin: "háishì / huòzhě", meaning: "Atau (kalimat tanya) / atau (kalimat berita)", note: "坐汽车好，还是骑自行车好？" },
+
+      { ch: "Bab 5", hanzi: "了 / 没(有)", pinyin: "le / méi(yǒu)", meaning: "Partikel perubahan/selesai / belum atau tidak terjadi", note: "你吃早饭了吗？— 我还没吃。" },
+      { ch: "Bab 5", hanzi: "一……就……", pinyin: "yí ... jiù ...", meaning: "Begitu ... langsung ...", note: "一到十一月就冷了。" },
+      { ch: "Bab 5", hanzi: "感冒 / 发烧 / 头疼 / 咳嗽", pinyin: "gǎnmào / fāshāo / tóuténg / késou", meaning: "Masuk angin-flu / demam / sakit kepala / batuk", note: "Kosakata keluhan kesehatan." },
+      { ch: "Bab 5", hanzi: "有点儿 + Adj", pinyin: "yǒudiǎnr + Adj", meaning: "Agak / sedikit (untuk kondisi kurang nyaman)", note: "我今天有点儿头疼。" },
+
+      { ch: "Bab 6", hanzi: "把 + Objek + Kata Kerja + Posisi/Hasil", pinyin: "bǎ + O + V + C", meaning: "Konstruksi perlakuan terhadap objek tertentu", note: "把电话号码写在这儿。" },
+      { ch: "Bab 6", hanzi: "修好了 / 找到了 / 听清楚了", pinyin: "xiū hǎo le / zhǎodào le / tīng qīngchu le", meaning: "Sudah selesai diperbaiki / sudah ketemu / terdengar jelas", note: "Pelengkap hasil (结果补语)." },
+      { ch: "Bab 6", hanzi: "一边……一边……", pinyin: "yìbiān ... yìbiān ...", meaning: "Sambil ... sambil ... (dua aksi bersamaan)", note: "一边吃饭一边聊天儿。" },
+      { ch: "Bab 6", hanzi: "越来越 + Adj", pinyin: "yuèláiyuè + Adj", meaning: "Semakin lama semakin ...", note: "天气越来越冷了。" },
+
+      { ch: "Bab 7", hanzi: "挂失 / 密码 / 护照", pinyin: "guàshī / mìmǎ / hùzhào", meaning: "Lapor kehilangan kartu / kata sandi / paspor", note: "Urusan bank & administrasi." },
+      { ch: "Bab 7", hanzi: "AA制 / 中餐 / 西餐 / 外卖", pinyin: "AA zhì / zhōngcān / xīcān / wàimài", meaning: "Bayar patungan masing-masing / makanan Tiongkok / Barat / pesan antar", note: "Situasi makan bersama teman." },
+      { ch: "Bab 7", hanzi: "先……然后……", pinyin: "xiān ... ránhòu ...", meaning: "Pertama-tama ... kemudian ...", note: "Urutan langkah saat menjelaskan rencana atau bantuan." }
+    ];
+
+    const CHAPTERS = [
+      {
+        id: "bab1",
+        title: "Bab 1: Pelafalan, Sapaan & Perkenalan",
+        subtitle: "你好 · 谢谢 · 我是中国人 · 变调",
+        summary: "Menguasai salam waktu, perubahan nada (三声变调, 不, 一), dan perkenalan nama serta asal negara.",
+        badgeName: "Duta Sapaan Kampus",
+        missions: [
+          {
+            id: "b1_m1",
+            type: "listening",
+            topic: "Menyimak Sapaan & Kesopanan",
+            prompt: "Dengarkan audio percakapan pagi di kampus (atau baca transkripnya bila audio dimatikan), lalu pilih makna yang tepat.",
+            audioText: "老师，早上好！您身体好吗？很好，谢谢！",
+            dialogue: [
+              { speaker: "Mahasiswa", hanzi: "老师，早上好！您身体好吗？", pinyin: "Lǎoshī, zǎoshang hǎo! Nín shēntǐ hǎo ma?", meaning: "Dosen, selamat pagi! Apa kabar kesehatan Anda?" },
+              { speaker: "Dosen", hanzi: "很好，谢谢！", pinyin: "Hěn hǎo, xièxie!", meaning: "Sangat baik, terima kasih!" }
+            ],
+            options: [
+              "Mahasiswa menyapa dosen di pagi hari dan menanyakan kabar; dosen menjawab sangat baik",
+              "Mahasiswa berpamitan pulang malam hari kepada temannya",
+              "Dosen menanyakan harga buku di toko kampus",
+              "Mahasiswa meminta maaf karena terlambat masuk ujian"
+            ],
+            answer: 0,
+            hints: [
+              "Perhatikan kata 早上好 (zǎoshang hǎo) dan kata ganti sopan 您 (nín).",
+              "身体好吗 berarti 'apa kabar kesehatanmu/Anda'.",
+              "Pilih opsi pertama."
+            ],
+            explain: "您 (nín) dipakai untuk menghormati dosen/orang yang lebih tua, dan 早上好 dipakai untuk salam pagi."
+          },
+          {
+            id: "b1_m2",
+            type: "choice",
+            topic: "Aturan Sandhi Nada (变调)",
+            prompt: "Dalam ungkapan '不客气 (bù + kèqi)' dan '你好 (nǐ + hǎo)', bagaimana pelafalan nada yang tepat?",
+            hanzi: "不客气 · 你好",
+            pinyin: "bù kèqi · nǐ hǎo",
+            meaning: "Sama-sama · Halo",
+            options: [
+              "bú kèqi (nada ke-2 sebelum nada ke-4) dan ní hǎo (nada ke-2 sebelum nada ke-3)",
+              "bù kèqi (nada ke-4 tetap) dan nǐ hǎo (nada ke-3 tetap)",
+              "bū kèqi (nada ke-1) dan nì hǎo (nada ke-4)",
+              "Keduanya diucapkan tanpa nada sama sekali"
+            ],
+            answer: 0,
+            hints: [
+              "Kata 不 (bù) aslinya nada ke-4; jika bertemu nada ke-4 lain (seperti 客 kè), ia berubah naik menjadi nada ke-2 (bú).",
+              "Dua nada ke-3 berurutan (你 nǐ + 好 hǎo) membuat nada pertama naik menjadi nada ke-2 (ní).",
+              "Pilih bú kèqi dan ní hǎo."
+            ],
+            explain: "Dua aturan sandhi dasar: 不 menjadi bú sebelum nada ke-4, dan nada ke-3 pertama menjadi nada ke-2 sebelum nada ke-3."
+          },
+          {
+            id: "b1_m3",
+            type: "order",
+            topic: "Menanyakan Marga Secara Sopan",
+            prompt: "Susun kata berikut menjadi kalimat sopan: 'Permisi, marga Anda siapa?'",
+            tokens: ["请问", "您", "贵姓"],
+            answer: ["请问", "您", "贵姓"],
+            pinyinHint: "Qǐngwèn nín guìxìng?",
+            hints: [
+              "Awali dengan kata sopan 请问 (qǐngwèn = permisi/boleh bertanya).",
+              "Gunakan kata ganti hormat 您 (nín) diikuti 贵姓 (guìxìng).",
+              "Urutannya: 请问 您 贵姓."
+            ],
+            explain: "请问您贵姓？(Qǐngwèn nín guìxìng?) adalah bentuk paling sopan untuk menanyakan marga."
+          },
+          {
+            id: "b1_m4",
+            type: "speaking",
+            topic: "Speaking: Perkenalan Diri Lengkap",
+            prompt: "Latihan Speaking: Ucapkan perkenalan diri dua kalimat ini dengan nada dan jeda yang jelas.",
+            hanzi: "你好！我叫Rafi，我是印度尼西亚人。认识你很高兴！",
+            pinyin: "Nǐ hǎo! Wǒ jiào Rafi, wǒ shì Yìndùníxīyà rén. Rènshi nǐ hěn gāoxìng!",
+            meaning: "Halo! Nama saya Rafi, saya orang Indonesia. Senang berkenalan denganmu!",
+            hints: [
+              "Pecah jadi 3 bagian pendek: Nǐ hǎo! → Wǒ jiào Rafi, wǒ shì Yìndùníxīyà rén. → Rènshi nǐ hěn gāoxìng!",
+              "Klik 'Dengar Contoh' untuk menyimak pengucapan alami Mandarin.",
+              "Ucapkan lantang lalu rekam suaramu untuk membandingkan hasilnya."
+            ],
+            explain: "Menggabungkan nama (我叫...), asal negara (我是...人), dan sapaan ramah (认识你很高兴) membuat perkenalan terasa alami."
+          },
+          {
+            id: "b1_m5",
+            type: "choice",
+            topic: "Boss Bab 1: Simulasi Perkenalan Pertama",
+            prompt: "Teman sekampus berkata: '我叫林娜，我是中国人。你呢？(Wǒ jiào Lín Nà, wǒ shì Zhōngguórén. Nǐ ne?)' Apa maksud '你呢？' di sini?",
+            hanzi: "你呢？",
+            pinyin: "Nǐ ne?",
+            meaning: "Bagaimana dengan kamu?",
+            options: [
+              "Membalikkan pertanyaan yang sama kepadamu (siapa namamu dan dari negara mana asalmu)",
+              "Menanyakan jam berapa kelas dimulai",
+              "Menanyakan di mana letak perpustakaan",
+              "Menyatakan bahwa ia tidak mau berkenalan"
+            ],
+            answer: 0,
+            hints: [
+              "Partikel tanya akhir 呢 (ne) dipakai setelah topik/kata ganti untuk menanyakan hal yang sama balik.",
+              "Karena ia baru menyebut nama dan negara asal, 你呢 berarti 'Kalau kamu (siapa namamu & dari negara mana)?'",
+              "Pilih opsi pertama."
+            ],
+            explain: "Partikel 呢 (ne) sangat hemat kata untuk memantulkan pertanyaan sebelumnya dalam percakapan."
+          }
+        ]
+      },
+      {
+        id: "bab2",
+        title: "Bab 2: Benda, Keluarga & Jumlah",
+        subtitle: "这是什么 · 你们班有多少人 · 量词",
+        summary: "Menunjuk benda/orang, membedakan 几 vs 多少, serta menggunakan kata satuan 本, 个, 口, dan 位.",
+        badgeName: "Master Kata Satuan",
+        missions: [
+          {
+            id: "b2_m1",
+            type: "listening",
+            topic: "Menyimak Dialog Benda & Pemilik",
+            prompt: "Simak dialog singkat di ruang kelas ini, lalu jawab: benda apa yang sedang dibicarakan?",
+            audioText: "这是什么书？这是汉语词典。那是你的词典吗？不是，那是我同学的。",
+            dialogue: [
+              { speaker: "A", hanzi: "这是什么书？", pinyin: "Zhè shì shénme shū?", meaning: "Ini buku apa?" },
+              { speaker: "B", hanzi: "这是汉语词典。", pinyin: "Zhè shì Hànyǔ cídiǎn.", meaning: "Ini kamus bahasa Mandarin." },
+              { speaker: "A", hanzi: "那是你的词典吗？", pinyin: "Nà shì nǐ de cídiǎn ma?", meaning: "Apakah itu kamusmu?" },
+              { speaker: "B", hanzi: "不是，那是我同学的。", pinyin: "Bú shì, nà shì wǒ tóngxué de.", meaning: "Bukan, itu punya teman sekelasku." }
+            ],
+            options: [
+              "Kamus bahasa Mandarin milik teman sekelas",
+              "Majalah olahraga milik dosen",
+              "Tiket kereta api milik kakak",
+              "Peta kota Beijing milik tamu"
+            ],
+            answer: 0,
+            hints: [
+              "汉语词典 (Hànyǔ cídiǎn) = kamus bahasa Mandarin.",
+              "我同学的 (wǒ tóngxué de) = milik teman sekelasku.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Struktur [Pemilik] + 的 tanpa mengulang kata benda di akhir (我同学的) lazim dipakai bila bendanya sudah jelas."
+          },
+          {
+            id: "b2_m2",
+            type: "choice",
+            topic: "Pilihan Kata Satuan (量词)",
+            prompt: "Pasangan kata satuan mana yang SEMUANYA tepat?",
+            hanzi: "两____书 · 五____人 · 一____老师",
+            pinyin: "liǎng ____ shū · wǔ ____ rén · yí ____ lǎoshī",
+            meaning: "dua buku · lima orang anggota keluarga · seorang dosen (sopan)",
+            options: [
+              "两本书 · 五口人 · 一位老师",
+              "两个书 · 五本人 · 一口老师",
+              "两瓶书 · 五条人 · 一本老师",
+              "两口书 · 五位人 · 一条老师"
+            ],
+            answer: 0,
+            hints: [
+              "Buku memakai 本 (běn), anggota keluarga memakai 口 (kǒu).",
+              "Untuk menyebut guru/dosen secara sopan dipakai 位 (wèi).",
+              "Pilih 两本书 · 五口人 · 一位老师."
+            ],
+            explain: "Perhatikan juga angka 2 sebelum kata satuan dipakai 两 (liǎng), bukan 二 (èr), sehingga menjadi 两本书."
+          },
+          {
+            id: "b2_m3",
+            type: "order",
+            topic: "Menanyakan Jumlah Mahasiswa di Kelas",
+            prompt: "Susun kata berikut menjadi 'Kelas kalian ada berapa mahasiswa?'",
+            tokens: ["你们", "班", "有", "多少", "学生"],
+            answer: ["你们", "班", "有", "多少", "学生"],
+            pinyinHint: "Nǐmen bān yǒu duōshao xuésheng?",
+            hints: [
+              "你们班 (nǐmen bān) = kelas kalian.",
+              "有 (yǒu) = ada/memiliki, 多少 (duōshao) = berapa banyak, 学生 (xuésheng) = mahasiswa/siswa.",
+              "Urutannya: 你们 班 有 多少 学生."
+            ],
+            explain: "Dalam kalimat tanya dengan kata tanya spesifik (多少), partikel 吗 di akhir kalimat tidak digunakan."
+          },
+          {
+            id: "b2_m4",
+            type: "speaking",
+            topic: "Speaking: Keluarga & Kepemilikan",
+            prompt: "Latihan Speaking: Ucapkan kalimat ini dengan pengucapan 有 (yǒu) dan 没有 (méiyǒu) yang kontras.",
+            hanzi: "我家有四口人，我有一个妹妹，没有哥哥。",
+            pinyin: "Wǒ jiā yǒu sì kǒu rén, wǒ yǒu yí ge mèimei, méiyǒu gēge.",
+            meaning: "Keluargaku ada 4 orang, saya punya satu adik perempuan, tidak punya kakak laki-laki.",
+            hints: [
+              "一个 dilafalkan yí ge (sandhi 一 sebelum nada ke-4/netral).",
+              "Gunakan 没有 (méiyǒu) untuk menyangkal kepemilikan saudara.",
+              "Dengarkan contoh suaranya lalu tirukan dengan lancar."
+            ],
+            explain: "Menggabungkan kalimat positif (有...) dan negatif (没有...) adalah pola inti dari Bab 6 Speaking."
+          },
+          {
+            id: "b2_m5",
+            type: "choice",
+            topic: "Boss Bab 2: Dialog Kelas & Gender",
+            prompt: "Di kelas ada 18 mahasiswa: 10 mahasiswi (女生) dan 8 mahasiswa putra (男生). Pernyataan Mandarin mana yang akurat?",
+            hanzi: "我们班有十八个学生，十个女生，八个男生。",
+            pinyin: "Wǒmen bān yǒu shíbā ge xuésheng, shí ge nǚshēng, bā ge nánshēng.",
+            meaning: "?",
+            options: [
+              "Kelas kami ada 18 mahasiswa, 10 mahasiswi, dan 8 mahasiswa putra",
+              "Kelas kami ada 80 mahasiswa, semuanya laki-laki",
+              "Kelas kami tidak punya mahasiswa sama sekali",
+              "Kelas kami hanya ada 10 buku kamus"
+            ],
+            answer: 0,
+            hints: [
+              "十八 = 18, 女生 = siswi/mahasiswi, 男生 = siswa/mahasiswa putra.",
+              "Cocokkan angka dan jenis kelaminnya.",
+              "Pilih opsi pertama."
+            ],
+            explain: "女生 (nǚshēng) dan 男生 (nánshēng) sering dipakai di lingkungan sekolah dan kampus."
+          }
+        ]
+      },
+      {
+        id: "bab3",
+        title: "Bab 3: Belanja, Harga, Tanggal & Jam",
+        subtitle: "多少钱一斤 · 几月几号 · 几点上课",
+        summary: "Transaksi jual beli dengan satuan uang/berat, menyebutkan tanggal & hari, serta membaca jam (点/半/刻/差).",
+        badgeName: "Navigator Waktu & Pasar",
+        missions: [
+          {
+            id: "b3_m1",
+            type: "listening",
+            topic: "Menyimak Transaksi Buah di Pasar",
+            prompt: "Simak percakapan pembeli dan penjual buah ini, lalu hitung total belanjanya!",
+            audioText: "苹果多少钱一斤？五块一斤。我要两斤，再要一瓶水。水三块，一共十三块。",
+            dialogue: [
+              { speaker: "Pembeli", hanzi: "苹果多少钱一斤？", pinyin: "Píngguǒ duōshao qián yì jīn?", meaning: "Apel berapa harganya per jīn?" },
+              { speaker: "Penjual", hanzi: "五块一斤。", pinyin: "Wǔ kuài yì jīn.", meaning: "Lima kuài per jīn." },
+              { speaker: "Pembeli", hanzi: "我要两斤，再要一瓶水。", pinyin: "Wǒ yào liǎng jīn, zài yào yì píng shuǐ.", meaning: "Saya mau dua jīn, tambah satu botol air." },
+              { speaker: "Penjual", hanzi: "水三块，一共十三块。", pinyin: "Shuǐ sān kuài, yígòng shísān kuài.", meaning: "Air tiga kuài, totalnya tiga belas kuài." }
+            ],
+            options: [
+              "Apel 2 jīn (10 kuài) + 1 botol air (3 kuài) = total 13 kuài",
+              "Apel 1 jīn (5 kuài) + 2 botol air (6 kuài) = total 11 kuài",
+              "Totalnya 30 kuài dan tidak membeli air",
+              "Penjual mengatakan apelnya gratis"
+            ],
+            answer: 0,
+            hints: [
+              "五块一斤 × 两斤 = 10 kuài.",
+              "Ditambah 水三块 (air 3 kuài) → 一共十三块 (total 13 kuài).",
+              "Pilih opsi pertama."
+            ],
+            explain: "Kata 再 (zài) dipakai saat menambahkan pesanan/pembelian lagi (再要一瓶水)."
+          },
+          {
+            id: "b3_m2",
+            type: "choice",
+            topic: "Membaca Jam: 刻 & 差",
+            prompt: "Bagaimana cara mengatakan pukul 07:45 (jam 8 kurang 15 menit) dalam bahasa Mandarin?",
+            hanzi: "07:45",
+            pinyin: "?",
+            meaning: "Jam delapan kurang seperempat",
+            options: [
+              "差一刻八点 (chà yí kè bā diǎn)",
+              "八点一刻 (bā diǎn yí kè)",
+              "七点半 (qī diǎn bàn)",
+              "差半点八点 (chà bàn diǎn bā diǎn)"
+            ],
+            answer: 0,
+            hints: [
+              "一刻 (yí kè) = 15 menit (seperempat jam), 差 (chà) = kurang.",
+              "Kurang 15 menit menuju jam 8 = 差一刻八点.",
+              "Pilih 差一刻八点 (chà yí kè bā diǎn)."
+            ],
+            explain: "八点一刻 adalah 08:15 (jam 8 lewat 15), sedangkan 差一刻八点 adalah 07:45 (jam 8 kurang 15)."
+          },
+          {
+            id: "b3_m3",
+            type: "order",
+            topic: "Ajakan & Tanggal",
+            prompt: "Susun kata berikut menjadi ajakan: 'Kita bersama-sama pergi bermain, bagaimana?'",
+            tokens: ["咱们", "一起", "去", "玩儿", "怎么样"],
+            answer: ["咱们", "一起", "去", "玩儿", "怎么样"],
+            pinyinHint: "Zánmen yìqǐ qù wánr, zěnmeyàng?",
+            hints: [
+              "咱们 (zánmen) = kita (termasuk lawan bicara), 一起 (yìqǐ) = bersama-sama.",
+              "去玩儿 (qù wánr) = pergi jalan-jalan/main, diakhiri 怎么样 (zěnmeyàng = bagaimana pendapatmu?).",
+              "Urutannya: 咱们 一起 去 玩儿 怎么样."
+            ],
+            explain: "Pola 咱们一起 + [Aktivitas] + 怎么样？ adalah ajakan khas di Bab 9 Speaking."
+          },
+          {
+            id: "b3_m4",
+            type: "speaking",
+            topic: "Speaking: Jadwal Harian Kampus",
+            prompt: "Latihan Speaking: Ucapkan kalimat jadwal harian ini dengan ritme yang natural.",
+            hanzi: "我每天七点起床，八点半上课，晚上十一点睡觉。",
+            pinyin: "Wǒ měitiān qī diǎn qǐchuáng, bā diǎn bàn shàngkè, wǎnshang shíyī diǎn shuìjiào.",
+            meaning: "Setiap hari saya bangun jam 7, masuk kelas jam 8.30, dan tidur jam 11 malam.",
+            hints: [
+              "起床 (qǐchuáng) = bangun tidur, 上课 (shàngkè) = masuk kelas, 睡觉 (shuìjiào) = tidur.",
+              "Dengarkan contoh audio, lalu latih per klausa sebelum menyambungnya.",
+              "Rekam suaramu untuk mengecek kejelasan nada dan jedanya."
+            ],
+            explain: "Urutan waktu harian dari pagi (七点, 八点半) ke malam (晚上十一点) selalu diletakkan sebelum kata kerja."
+          },
+          {
+            id: "b3_m5",
+            type: "choice",
+            topic: "Boss Bab 3: Konfirmasi Jadwal",
+            prompt: "Temanmu memastikan: '今天十月十号，星期六，对吗？(Jīntiān shíyuè shíhào, xīngqīliù, duì ma?)' Jika benar, respon paling alami adalah...",
+            hanzi: "对，没错！ / 好的，没问题。",
+            pinyin: "Duì, méi cuò! / Hǎo de, méi wèntí.",
+            meaning: "?",
+            options: [
+              "对，今天十月十号，星期六。(Benar, hari ini tanggal 10 Oktober, hari Sabtu.)",
+              "苹果五块一斤。(Apel 5 kuài per jīn.)",
+              "银行在超市旁边。(Bank ada di sebelah supermarket.)",
+              "我昨天感冒了。(Kemarin saya masuk angin.)"
+            ],
+            answer: 0,
+            hints: [
+              "Pertanyaan diakhiri 对吗 (duì ma = benar kan?).",
+              "Konfirmasi dengan 对 (duì) lalu ulangi tanggal/harinya.",
+              "Pilih opsi pertama."
+            ],
+            explain: "对，…… (Duì, ...) adalah respon langsung untuk membenarkan pertanyaan konfirmasi."
+          }
+        ]
+      },
+      {
+        id: "bab4",
+        title: "Bab 4: Arah, Transportasi & Pilihan",
+        subtitle: "银行在哪儿 · 旁边/对面 · 还是",
+        summary: "Menunjukkan posisi bangunan dengan kata arah, menjelaskan rute 从……到……, dan membandingkan transportasi dengan 还是.",
+        badgeName: "Pemandu Jalan Kampus",
+        missions: [
+          {
+            id: "b4_m1",
+            type: "listening",
+            topic: "Menyimak Petunjuk Arah",
+            prompt: "Simak petunjuk arah menuju Bank Tiongkok (中国银行) berikut, lalu tentukan lokasinya!",
+            audioText: "请问，中国银行在哪儿？不远，就在学校对面，超市的旁边。",
+            dialogue: [
+              { speaker: "Penanya", hanzi: "请问，中国银行在哪儿？", pinyin: "Qǐngwèn, Zhōngguó Yínháng zài nǎr?", meaning: "Permisi, Bank Tiongkok ada di mana?" },
+              { speaker: "Warga", hanzi: "不远，就在学校对面，超市的旁边。", pinyin: "Bù yuǎn, jiù zài xuéxiào duìmiàn, chāoshì de pángbiān.", meaning: "Tidak jauh, tepat di seberang kampus, di sebelah supermarket." }
+            ],
+            options: [
+              "Tidak jauh, tepat di seberang kampus dan di samping supermarket",
+              "Sangat jauh di luar kota dan harus naik pesawat",
+              "Di dalam ruang kelas lantai atas",
+              "Di belakang stasiun kereta yang jauh"
+            ],
+            answer: 0,
+            hints: [
+              "对面 (duìmiàn) = di seberang, 旁边 (pángbiān) = di samping/sebelah.",
+              "学校对面 = di seberang kampus; 超市的旁边 = di sebelah supermarket.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Kombinasi dua penanda lokasi (学校对面 + 超市旁边) membuat petunjuk arah jauh lebih akurat."
+          },
+          {
+            id: "b4_m2",
+            type: "choice",
+            topic: "Perbandingan Pilihan: 还是 vs 或者",
+            prompt: "Kapan kita memakai 还是 (háishì) dibanding 或者 (huòzhě)?",
+            hanzi: "坐地铁快，还是坐公共汽车快？",
+            pinyin: "Zuò dìtiě kuài, háishì zuò gōnggòng qìchē kuài?",
+            meaning: "Naik MRT/kereta bawah tanah cepat, atau naik bus umum cepat?",
+            options: [
+              "还是 dipakai dalam kalimat tanya pilihan; 或者 dipakai dalam kalimat pernyataan",
+              "还是 hanya untuk makanan; 或者 hanya untuk kendaraan",
+              "Keduanya tidak boleh dipakai di kalimat tanya maupun berita",
+              "还是 berarti 'karena'; 或者 berarti 'tetapi'"
+            ],
+            answer: 0,
+            hints: [
+              "Lihat tanda baca di akhir contoh kalimat: tanda tanya (？).",
+              "Dalam kalimat tanya yang meminta lawan bicara memilih salah satu, pakai 还是.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Ini pembeda penting di ujian: 还是 untuk kalimat tanya pilihan, 或者 untuk kalimat berita/pernyataan pilihan."
+          },
+          {
+            id: "b4_m3",
+            type: "order",
+            topic: "Menjelaskan Rute & Durasi",
+            prompt: "Susun kata berikut menjadi: 'Dari rumah saya sampai kampus naik sepeda butuh 15 menit.'",
+            tokens: ["从", "我家", "到", "学校", "骑自行车", "要", "十五分钟"],
+            answer: ["从", "我家", "到", "学校", "骑自行车", "要", "十五分钟"],
+            pinyinHint: "Cóng wǒ jiā dào xuéxiào qí zìxíngchē yào shíwǔ fēnzhōng.",
+            hints: [
+              "Mulai dengan rute: 从 我家 到 学校.",
+              "Lalu cara transportasinya: 骑自行车 (naik sepeda), diikuti 要 十五分钟 (butuh 15 menit).",
+              "Urutannya: 从 我家 到 学校 骑自行车 要 十五分钟."
+            ],
+            explain: "Struktur [从 A 到 B] + [Cara Transportasi] + [要 + Durasi] sangat praktis untuk menjelaskan perjalanan sehari-hari."
+          },
+          {
+            id: "b4_m4",
+            type: "speaking",
+            topic: "Speaking: Bertanya & Menjawab Arah",
+            prompt: "Latihan Speaking: Ucapkan tanya-jawab singkat penunjuk arah ini dengan intonasi bertanya dan menjawab yang jelas.",
+            hanzi: "请问，地铁站在哪儿？一直往前走，就在医院旁边。",
+            pinyin: "Qǐngwèn, dìtiězhàn zài nǎr? Yìzhí wǎng qián zǒu, jiù zài yīyuàn pángbiān.",
+            meaning: "Permisi, stasiun kereta bawah tanah ada di mana? Jalan lurus ke depan, tepat di sebelah rumah sakit.",
+            hints: [
+              "一直往前走 (yìzhí wǎng qián zǒu) = jalan lurus ke depan.",
+              "医院旁边 (yīyuàn pángbiān) = di samping rumah sakit.",
+              "Dengarkan contoh lalu rekam suaramu."
+            ],
+            explain: "Ungkapan 一直往前走 (jalan lurus ke depan) adalah frasa paling sering muncul saat menanyakan arah."
+          },
+          {
+            id: "b4_m5",
+            type: "choice",
+            topic: "Boss Bab 4: Alasan Memilih Transportasi",
+            prompt: "Temanmu berkata: '骑自行车很好，因为又快又环保，还对身体好。' Mengapa ia memilih naik sepeda?",
+            hanzi: "因为又快又环保，还对身体好。",
+            pinyin: "Yīnwèi yòu kuài yòu huánbǎo, hái duì shēntǐ hǎo.",
+            meaning: "?",
+            options: [
+              "Karena cepat sekaligus ramah lingkungan, serta baik untuk kesehatan tubuh",
+              "Karena tiket busnya gratis setiap hari",
+              "Karena ia tidak bisa berjalan kaki",
+              "Karena cuaca sedang turun salju lebat"
+            ],
+            answer: 0,
+            hints: [
+              "环保 (huánbǎo) = ramah lingkungan; 对身体好 (duì shēntǐ hǎo) = baik bagi kesehatan tubuh.",
+              "Pola 又……又…… berarti 'sudah ... sekaligus ...'.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Kosakata 环保 (ramah lingkungan) dan 对身体好 (baik bagi kesehatan) berasal langsung dari Bab 10 & 12 Listening."
+          }
+        ]
+      },
+      {
+        id: "bab5",
+        title: "Bab 5: Perubahan, Cuaca & Kesehatan",
+        subtitle: "了 & 没 · 一……就…… · 感冒了",
+        summary: "Menggunakan partikel 了 & penyangkalan 没(有), pola 一……就……, kosakata cuaca/pakaian, dan keluhan kesehatan.",
+        badgeName: "Penjaga Kondisi & Cuaca",
+        missions: [
+          {
+            id: "b5_m1",
+            type: "listening",
+            topic: "Menyimak Dialog Cuaca & Kesehatan",
+            prompt: "Simak percakapan tentang cuaca dan kondisi tubuh ini, lalu pilih penyebab ia masuk angin!",
+            audioText: "你怎么了？我感冒了，有点儿发烧。一到十一月就冷了，你要多穿点儿衣服。",
+            dialogue: [
+              { speaker: "A", hanzi: "你怎么了？", pinyin: "Nǐ zěnme le?", meaning: "Ada apa denganmu?" },
+              { speaker: "B", hanzi: "我感冒了，有点儿发烧。", pinyin: "Wǒ gǎnmào le, yǒudiǎnr fāshāo.", meaning: "Saya masuk angin/flu, agak demam." },
+              { speaker: "A", hanzi: "一到十一月就冷了，你要多穿点儿衣服。", pinyin: "Yí dào shíyī yuè jiù lěng le, nǐ yào duō chuān diǎnr yīfu.", meaning: "Begitu masuk November udara langsung dingin, kamu harus pakai baju lebih tebal." }
+            ],
+            options: [
+              "Ia masuk angin dan agak demam karena cuaca mulai dingin di bulan November",
+              "Ia sakit perut karena makan terlalu banyak semangka",
+              "Ia kehilangan paspor di bandara",
+              "Ia terlambat bangun karena lupa menyalakan alarm"
+            ],
+            answer: 0,
+            hints: [
+              "感冒了 (gǎnmào le) = masuk angin/flu, 有点儿发烧 = agak demam.",
+              "多穿点儿衣服 = pakai baju lebih banyak/tebal.",
+              "Pilih opsi pertama."
+            ],
+            explain: "多 + [Kata Kerja] + 点儿 (seperti 多穿点儿衣服, 多喝点儿水) dipakai untuk memberi saran yang ramah."
+          },
+          {
+            id: "b5_m2",
+            type: "choice",
+            topic: "了 vs 没(有) pada Kejadian",
+            prompt: "Manakah kalimat penyangkalan yang BENAR untuk menjawab '你昨天去医院了吗？(Apakah kemarin kamu pergi ke rumah sakit?)'?",
+            hanzi: "我昨天____去医院。",
+            pinyin: "Wǒ zuótiān ____ qù yīyuàn.",
+            meaning: "Kemarin saya tidak pergi ke rumah sakit.",
+            options: [
+              "没 (méi) — tanpa 了 di akhir kalimat",
+              "不 (bù) — dengan 了 di akhir kalimat",
+              "没了 (méi le) di depan kata kerja",
+              "很 (hěn) di depan kata kerja"
+            ],
+            answer: 0,
+            hints: [
+              "Menyangkal tindakan yang sudah/belum terjadi di waktu lampau memakai 没(有), bukan 不.",
+              "Jika sudah memakai 没, partikel 了 di akhir kalimat dihilangkan.",
+              "Pilih 没 (méi) tanpa 了 di akhir."
+            ],
+            explain: "Aturan emas: 没 + Kata Kerja (tanpa 了) untuk menyangkal kejadian yang tidak terjadi."
+          },
+          {
+            id: "b5_m3",
+            type: "order",
+            topic: "Pola 一……就……",
+            prompt: "Susun kata berikut menjadi: 'Begitu pulang ke rumah, saya langsung mengerjakan PR.'",
+            tokens: ["我", "一", "回家", "就", "做作业"],
+            answer: ["我", "一", "回家", "就", "做作业"],
+            pinyinHint: "Wǒ yì huí jiā jiù zuò zuòyè.",
+            hints: [
+              "Subjek 我 diletakkan di awal sebelum 一.",
+              "Aksi pertama: 回家 (pulang ke rumah), aksi kedua setelah 就: 做作业 (mengerjakan PR).",
+              "Urutannya: 我 一 回家 就 做作业."
+            ],
+            explain: "Jika kedua aksi dilakukan subjek yang sama, subjek diletakkan sebelum 一: [Subjek] + 一 + [Aksi 1] + 就 + [Aksi 2]."
+          },
+          {
+            id: "b5_m4",
+            type: "speaking",
+            topic: "Speaking: Menyampaikan Keluhan & Saran",
+            prompt: "Latihan Speaking: Ucapkan kalimat keluhan kesehatan beserta sarannya dengan empati.",
+            hanzi: "我今天头疼，嗓子也有点儿疼。你快去医院看看吧！",
+            pinyin: "Wǒ jīntiān tóuténg, sǎngzi yě yǒudiǎnr téng. Nǐ kuài qù yīyuàn kànkan ba!",
+            meaning: "Hari ini kepalaku sakit, tenggorokan juga agak sakit. Cepatlah periksa ke rumah sakit!",
+            hints: [
+              "嗓子 (sǎngzi) = tenggorokan, 看看 (kànkan) = periksa/lihat sebentar.",
+              "Partikel 吧 (ba) di akhir melembutkan saran agar terdengar peduli.",
+              "Dengarkan contoh audio lalu tirukan."
+            ],
+            explain: "Pengulangan kata kerja singkat (看看) ditambah partikel 吧 membuat saran terasa akrab dan tidak memerintah."
+          },
+          {
+            id: "b5_m5",
+            type: "choice",
+            topic: "Boss Bab 5: Menolong Situasi Darurat",
+            prompt: "Saat melihat seseorang terbaring di tanah (躺在地上的这个人), langkah komunikasi mana yang paling sesuai dengan pelajaran Bab 25?",
+            hanzi: "他怎么了？还有呼吸吗？快叫医生帮忙！",
+            pinyin: "Tā zěnme le? Hái yǒu hūxī ma? Kuài jiào yīshēng bāngmáng!",
+            meaning: "?",
+            options: [
+              "Mengecek kondisi kesadaran & napasnya, lalu segera memanggil dokter/bantuan",
+              "Membiarkannya sendirian tanpa mengecek",
+              "Menanyakan warna baju kesukaannya dulu",
+              "Mengajaknya berlomba lari"
+            ],
+            answer: 0,
+            hints: [
+              "呼吸 (hūxī) = bernapas, 叫医生帮忙 = panggil dokter untuk membantu.",
+              "Cocokkan makna kalimat Mandarin dengan tindakan pertolongan pertama.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Bab 25 Listening melatih kosakata keselamatan dan pertolongan pertama seperti 躺, 危险, 呼吸, dan 帮忙."
+          }
+        ]
+      },
+      {
+        id: "bab6",
+        title: "Bab 6: Kalimat 把, Pelengkap Hasil & Aksi Bersamaan",
+        subtitle: "把字句 · 修好了/找到了 · 一边……一边……",
+        summary: "Menguasai struktur kalimat 把 (memindahkan/memperlakukan objek), pelengkap hasil (好/到/清楚), dan pola 一边……一边…….",
+        badgeName: "Ahli Struktur Lanjutan",
+        missions: [
+          {
+            id: "b6_m1",
+            type: "listening",
+            topic: "Menyimak Dialog Benda Hilang & Kalimat 把",
+            prompt: "Simak percakapan tentang kamera yang tertinggal di taman ini, lalu pilih di mana kamera itu sekarang!",
+            audioText: "我的照相机找到了！刚才我把它放在椅子上了，后来服务员帮我登记好了。",
+            dialogue: [
+              { speaker: "A", hanzi: "我的照相机找到了！", pinyin: "Wǒ de zhàoxiàngjī zhǎodào le!", meaning: "Kameraku sudah ketemu!" },
+              { speaker: "A", hanzi: "刚才我把它放在椅子上了，后来服务员帮我登记好了。", pinyin: "Gāngcái wǒ bǎ tā fàng zài yǐzi shàng le, hòulái fúwùyuán bāng wǒ dēngjì hǎo le.", meaning: "Tadi saya menaruhnya di atas kursi, lalu petugas membantu mencatat/mendaftarkannya." }
+            ],
+            options: [
+              "Sudah ditemukan; tadinya ditaruh di kursi lalu dicatat/diamankan oleh petugas",
+              "Masih hilang dan belum ditemukan sampai sekarang",
+              "Rusak jatuh ke dalam danau",
+              "Sudah dijual ke toko buku"
+            ],
+            answer: 0,
+            hints: [
+              "找到了 (zhǎodào le) = berhasil ditemukan.",
+              "登记好了 (dēngjì hǎo le) = sudah dicatat/didaftarkan dengan rapi.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Pelengkap hasil 到 (pada 找到) menunjukkan hasil tercapai, sedangkan 好 (pada 登记好) menunjukkan selesai dengan tuntas."
+          },
+          {
+            id: "b6_m2",
+            type: "choice",
+            topic: "Aturan Dasar Kalimat 把 (把字句)",
+            prompt: "Dalam kalimat '请你把电话号码写在这儿。(Tolong tuliskan nomor telepon di sini)', mengapa memakai 把?",
+            hanzi: "请你把电话号码写在这儿。",
+            pinyin: "Qǐng nǐ bǎ diànhuà hàomǎ xiě zài zhèr.",
+            meaning: "Tolong tuliskan nomor telepon di sini.",
+            options: [
+              "Karena objek spesifik (nomor telepon) dikenai tindakan yang memindahkannya ke tempat tertentu (在 + 这儿)",
+              "Karena kalimatnya tidak memiliki kata kerja sama sekali",
+              "Karena menanyakan harga nomor telepon",
+              "Karena menyangkal masa lalu"
+            ],
+            answer: 0,
+            hints: [
+              "Perhatikan urutan: 把 + [Objek spesifik: 电话号码] + [Kata kerja: 写] + [Hasil/posisi: 在这儿].",
+              "Kata kerja dalam kalimat 把 selalu diikuti unsur tambahan (seperti 在 + lokasi atau pelengkap hasil).",
+              "Pilih opsi pertama."
+            ],
+            explain: "Struktur 把 sangat penting di Bab 21 Listening & Bab 22 Speaking: Subjek + 把 + Objek + Kata Kerja + Pelengkap/Lokasi."
+          },
+          {
+            id: "b6_m3",
+            type: "order",
+            topic: "Dua Aksi Bersamaan: 一边……一边……",
+            prompt: "Susun kata berikut menjadi: 'Mereka sambil makan malam sambil mengobrol.'",
+            tokens: ["他们", "一边", "吃晚饭", "一边", "聊天儿"],
+            answer: ["他们", "一边", "吃晚饭", "一边", "聊天儿"],
+            pinyinHint: "Tāmen yìbiān chī wǎnfàn yìbiān liáotiānr.",
+            hints: [
+              "Subjek 他们 di depan.",
+              "Pola: 一边 + [Aksi 1: 吃晚饭] + 一边 + [Aksi 2: 聊天儿].",
+              "Urutannya: 他们 一边 吃晚饭 一边 聊天儿."
+            ],
+            explain: "一边……一边…… menunjukkan dua aktivitas yang berlangsung bersamaan oleh subjek yang sama."
+          },
+          {
+            id: "b6_m4",
+            type: "speaking",
+            topic: "Speaking: Konfirmasi Perbaikan & Hasil",
+            prompt: "Latihan Speaking: Ucapkan kalimat ini dengan penekanan pada pelengkap hasil 修好了 (sudah selesai diperbaiki).",
+            hanzi: "电脑已经修好了，你现在可以发邮件了。",
+            pinyin: "Diànnǎo yǐjīng xiū hǎo le, nǐ xiànzài kěyǐ fā yóujiàn le.",
+            meaning: "Komputernya sudah selesai diperbaiki, sekarang kamu sudah bisa mengirim email.",
+            hints: [
+              "已经 (yǐjīng) = sudah, 修好了 (xiū hǎo le) = selesai diperbaiki.",
+              "发邮件 (fā yóujiàn) = mengirim email.",
+              "Dengarkan contoh lalu rekam suaramu."
+            ],
+            explain: "Kalimat ini langsung merujuk pada judul Bab 19 Listening (电脑修好了) dan Bab 21 Speaking (电脑已经修好了)."
+          },
+          {
+            id: "b6_m5",
+            type: "choice",
+            topic: "Boss Bab 6: Pelengkap Hasil dalam Percakapan",
+            prompt: "Suara di kelas terlalu pelan sehingga kamu tidak bisa menangkap penjelasannya. Kalimat Mandarin mana yang paling tepat?",
+            hanzi: "声音太小了，我没听清楚。",
+            pinyin: "Shēngyīn tài xiǎo le, wǒ méi tīng qīngchu.",
+            meaning: "?",
+            options: [
+              "Suaranya terlalu pelan, saya tidak mendengarnya dengan jelas",
+              "Suaranya terlalu mahal, saya tidak mau membelinya",
+              "Kelasnya sudah libur sejak bulan lalu",
+              "Saya sudah menulis surat dengan rapi"
+            ],
+            answer: 0,
+            hints: [
+              "声音 (shēngyīn) = suara, 太小了 = terlalu kecil/pelan.",
+              "没听清楚 (méi tīng qīngchu) = tidak mendengar dengan jelas.",
+              "Pilih opsi pertama."
+            ],
+            explain: "清楚 (qīngchu = jelas) sebagai pelengkap hasil (听清楚 / 看清楚) sering keluar dalam soal pemahaman."
+          }
+        ]
+      },
+      {
+        id: "bab7",
+        title: "Bab 7: Simulasi Ujian & Situasi Kota Nyata",
+        subtitle: "银行挂失 · 餐厅AA制 · 综合实战",
+        summary: "Misi gabungan akhir: mengurus kartu hilang di bank, makan bersama dengan sistem AA制, dan wawancara lisan singkat.",
+        badgeName: "Lulusan Kota & Kampus Hanyu",
+        missions: [
+          {
+            id: "b7_m1",
+            type: "listening",
+            topic: "Menyimak Urusan Bank (Kartu Hilang)",
+            prompt: "Simak percakapan di bank saat kartu bank hilang (Bab 18 Listening), lalu pilih dokumen yang diminta petugas!",
+            audioText: "我的银行卡丢了，我想办挂失。请先填一下这张表，再给我看一下你的护照。",
+            dialogue: [
+              { speaker: "Nasabah", hanzi: "我的银行卡丢了，我想办挂失。", pinyin: "Wǒ de yínhángkǎ diū le, wǒ xiǎng bàn guàshī.", meaning: "Kartu bank saya hilang, saya ingin mengurus laporan kehilangan." },
+              { speaker: "Petugas", hanzi: "请先填一下这张表，再给我看一下你的护照。", pinyin: "Qǐng xiān tián yíxià zhè zhāng biǎo, zài gěi wǒ kàn yíxià nǐ de hùzhào.", meaning: "Silakan isi formulir ini dulu, lalu tunjukkan paspor Anda kepada saya." }
+            ],
+            options: [
+              "Mengisi formulir (填表) dan menunjukkan paspor (护照)",
+              "Membeli dua kilogram apel dan air mineral",
+              "Menunjukkan tiket bioskop dan kamus",
+              "Menunggu sampai tahun depan tanpa mengisi apa pun"
+            ],
+            answer: 0,
+            hints: [
+              "挂失 (guàshī) = lapor kehilangan/blokir kartu.",
+              "填一下这张表 = isi formulir ini; 护照 (hùzhào) = paspor.",
+              "Pilih opsi pertama."
+            ],
+            explain: "Urutan tindakan menggunakan 先……再…… (pertama ..., kemudian ...) sangat penting dalam instruksi layanan."
+          },
+          {
+            id: "b7_m2",
+            type: "choice",
+            topic: "Budaya Makan Bersama: AA制",
+            prompt: "Dalam percakapan Bab 22 Listening, teman-teman sepakat makan siang dengan 'AA制 (AA zhì)'. Apa artinya?",
+            hanzi: "我们今天AA制吧！",
+            pinyin: "Wǒmen jīntiān AA zhì ba!",
+            meaning: "Hari ini kita AA制 saja ya!",
+            options: [
+              "Membayar bagian masing-masing / patungan secara adil",
+              "Hanya makan makanan Barat tanpa nasi",
+              "Makan gratis dibayari restoran",
+              "Membungkus semua makanan untuk dibawa pulang"
+            ],
+            answer: 0,
+            hints: [
+              "AA制 adalah istilah populer di kalangan mahasiswa dan pekerja muda.",
+              "Artinya setiap orang membayar porsi/bagiannya sendiri.",
+              "Pilih opsi pertama."
+            ],
+            explain: "AA制 sangat umum dipakai di kampus saat mahasiswa makan bersama di kantin atau restoran."
+          },
+          {
+            id: "b7_m3",
+            type: "order",
+            topic: "Menyusun Kalimat Rencana & Alasan",
+            prompt: "Susun kata berikut menjadi: 'Saya suka belajar bahasa Mandarin, karena sangat menarik.'",
+            tokens: ["我", "喜欢", "学习", "汉语", "因为", "很有意思"],
+            answer: ["我", "喜欢", "学习", "汉语", "因为", "很有意思"],
+            pinyinHint: "Wǒ xǐhuan xuéxí Hànyǔ, yīnwèi hěn yǒuyìsi.",
+            hints: [
+              "Klausa pertama: 我 喜欢 学习 汉语 (Saya suka belajar bahasa Mandarin).",
+              "Klausa alasan: 因为 很有意思 (karena sangat menarik).",
+              "Urutannya: 我 喜欢 学习 汉语 因为 很有意思."
+            ],
+            explain: "很有意思 (hěn yǒuyìsi) berarti 'sangat menarik/seru', kebalikannya 没有意思."
+          },
+          {
+            id: "b7_m4",
+            type: "speaking",
+            topic: "Speaking Final: Monolog Perkenalan & Keseharian",
+            prompt: "Latihan Speaking Final: Ucapkan monolog singkat 3 kalimat ini seolah sedang ujian lisan!",
+            hanzi: "大家好！我叫Rafi，今年十九岁，在大学学习。我每天八点上课，下午喜欢锻炼身体。谢谢大家！",
+            pinyin: "Dàjiā hǎo! Wǒ jiào Rafi, jīnnián shíjiǔ suì, zài dàxué xuéxí. Wǒ měitiān bā diǎn shàngkè, xiàwǔ xǐhuan duànliàn shēntǐ. Xièxie dàjiā!",
+            meaning: "Halo semuanya! Nama saya Rafi, tahun ini 19 tahun, kuliah di universitas. Setiap hari saya masuk kelas jam 8, sore hari suka berolahraga. Terima kasih semuanya!",
+            hints: [
+              "大家好 (dàjiā hǎo) = halo semuanya; 锻炼身体 (duànliàn shēntǐ) = berolahraga/melatih fisik.",
+              "Dengarkan contoh audio satu kali penuh, lalu latih per kalimat.",
+              "Rekam suaramu dan dengarkan kembali kelancaran nadanya!"
+            ],
+            explain: "Monolog ini merangkum salam, usia, aktivitas kuliah, jadwal jam, hobi olahraga, dan penutup sopan."
+          },
+          {
+            id: "b7_m5",
+            type: "choice",
+            topic: "Final Boss: Evaluasi Komprehensif",
+            prompt: "Manakah kalimat berikut yang TATA BAHASANYA PALING BENAR seluruhnya?",
+            hanzi: "A vs B vs C vs D",
+            pinyin: "Pilih struktur Mandarin yang baku",
+            meaning: "?",
+            options: [
+              "我昨天没去超市，因为天气太冷了。",
+              "我昨天不去超市了，因为天气冷很。",
+              "我们班有几三十个学生，他们都是美国人。",
+              "请你写电话号码把在这儿。"
+            ],
+            answer: 0,
+            hints: [
+              "Cek penyangkalan waktu lampau (昨天 → pakai 没, tanpa 了 di akhir klausa pertama).",
+              "Periksa juga posisi kata keterangan tingkat (太冷了) yang benar.",
+              "Pilih opsi A."
+            ],
+            explain: "Opsi A benar semua: 昨天 + 没 + 去 (tanpa 了), dan 太 + Adj + 了 (太冷了). Opsi B salah di 不...了 & 冷很; opsi C menggabung 几 dan 三十; opsi D salah urutan 把."
+          }
+        ]
+      }
+    ];
+
+    function getDefaultState() {
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        xp: 0,
+        energy: 5,
+        lastEnergyTick: Date.now(),
+        streak: 1,
+        lastPlayDate: today,
+        mode: "belajar",
+        activeTab: "peta",
+        currentChapterId: "bab1",
+        currentMissionIndex: 0,
+        completedMissions: {},
+        chapterStars: {},
+        badges: [],
+        reviewQueue: [],
+        consecutiveCorrect: 0,
+        consecutiveWrong: 0,
+        speakingDoneCount: 0,
+        vocabFilter: "Semua",
+        vocabSearch: ""
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return getDefaultState();
+        const parsed = { ...getDefaultState(), ...JSON.parse(raw) };
+        return syncEnergyAndStreak(parsed);
+      } catch {
+        return getDefaultState();
+      }
+    }
+
+    function syncEnergyAndStreak(st) {
+      const now = Date.now();
+      const elapsedMin = Math.floor((now - (st.lastEnergyTick || now)) / 60000);
+      if (elapsedMin >= 3 && st.energy < 5) {
+        const recover = Math.min(5 - st.energy, Math.floor(elapsedMin / 3));
+        st.energy += recover;
+        st.lastEnergyTick = now;
+      } else if (st.energy >= 5) {
+        st.lastEnergyTick = now;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      if (st.lastPlayDate !== today) {
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        st.streak = st.lastPlayDate === yesterday ? st.streak + 1 : 1;
+        st.lastPlayDate = today;
+      }
+      return st;
+    }
+
+    let state = loadState();
+    let hintLevel = 0;
+    let selectedOption = null;
+    let builtTokens = [];
+    let lastFeedback = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordedUrl = null;
+    let speakingVerified = false;
+    let speechRate = 0.9;
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderStatsBar();
+      renderReviewBadge();
+    }
+
+    function getLevel(xp) {
+      return Math.floor(xp / 100) + 1;
+    }
+
+    function setMentor(msg) {
+      const el = document.getElementById("mentorMsg");
+      if (el) el.textContent = msg;
+    }
+
+    function renderStatsBar() {
+      const lvl = getLevel(state.xp);
+      const bar = document.getElementById("statsBar");
+      bar.innerHTML = `
+        <span class="stat-pill">Lv.${lvl} • ${state.xp} XP</span>
+        <span class="stat-pill">Energi: ${state.energy}/5</span>
+        <span class="stat-pill">Streak: ${state.streak} hari</span>
+        <div class="mode-switch" title="Mode Belajar: bebas latihan. Mode Tantangan: memakai Energi.">
+          <button class="mode-chip ${state.mode === "belajar" ? "active" : ""}" onclick="setMode('belajar')">Belajar</button>
+          <button class="mode-chip ${state.mode === "tantangan" ? "active" : ""}" onclick="setMode('tantangan')">Tantangan</button>
+        </div>
+      `;
+    }
+
+    function renderReviewBadge() {
+      const badge = document.getElementById("reviewCountBadge");
+      if (!badge) return;
+      badge.textContent = state.reviewQueue.length > 0 ? `(${state.reviewQueue.length})` : "";
+    }
+
+    function setMode(newMode) {
+      state.mode = newMode;
+      saveState();
+      setMentor(
+        newMode === "tantangan"
+          ? "Mode Tantangan aktif: jawaban salah mengurangi 1 Energi—cocok untuk simulasi kesiapan ujian!"
+          : "Mode Belajar aktif: latihan santai tanpa potongan energi, bebas mengulang audio dan speaking."
+      );
+      renderCurrentTab();
+    }
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      document.querySelectorAll(".tab-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tab === tab);
+      });
+      saveState();
+      renderCurrentTab();
+    }
+
+    function findMission(chapterId, missionId) {
+      const ch = CHAPTERS.find((c) => c.id === chapterId);
+      if (!ch) return null;
+      return ch.missions.find((m) => m.id === missionId) || null;
+    }
+
+    function startChapter(chapterId, missionIdx = 0) {
+      state.currentChapterId = chapterId;
+      state.currentMissionIndex = missionIdx;
+      state.activeTab = "misi";
+      resetMissionScratch();
+      const ch = CHAPTERS.find((c) => c.id === chapterId);
+      setMentor(`Memasuki ${ch.title}. Dengarkan audionya, cermati struktur kalimatnya, dan praktikkan speaking!`);
+      saveState();
+      document.querySelectorAll(".tab-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tab === "misi");
+      });
+      renderCurrentTab();
+    }
+
+    function resetMissionScratch() {
+      hintLevel = 0;
+      selectedOption = null;
+      builtTokens = [];
+      lastFeedback = null;
+      speakingVerified = false;
+      if (recordedUrl) {
+        URL.revokeObjectURL(recordedUrl);
+        recordedUrl = null;
+      }
+    }
+
+    function renderCurrentTab() {
+      renderStatsBar();
+      renderReviewBadge();
+      const container = document.getElementById("mainContent");
+      if (state.activeTab === "peta") container.innerHTML = renderMapView();
+      else if (state.activeTab === "misi") container.innerHTML = renderMissionView();
+      else if (state.activeTab === "kamus") container.innerHTML = renderVocabView();
+      else if (state.activeTab === "ulang") container.innerHTML = renderReviewView();
+      else container.innerHTML = renderProfileView();
+    }
+
+    function renderMapView() {
+      const cards = CHAPTERS.map((ch) => {
+        const doneCount = ch.missions.filter((m) => state.completedMissions[m.id]).length;
+        const pct = Math.round((doneCount / ch.missions.length) * 100);
+        const stars = state.chapterStars[ch.id] || 0;
+        const hasBadge = state.badges.includes(ch.badgeName);
+        return `
+          <article class="chapter-card">
+            <div>
+              <div class="chapter-meta">${ch.subtitle}</div>
+              <h3>${ch.title}</h3>
+              <p style="margin:0 0 8px;font-size:0.86rem;color:var(--muted);">${ch.summary}</p>
+              <div class="badge-row">
+                <span class="tag">${doneCount}/${ch.missions.length} Misi</span>
+                <span class="tag ok">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</span>
+                ${hasBadge ? `<span class="tag warn">Lencana: ${ch.badgeName}</span>` : ""}
+              </div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="startChapter('${ch.id}', 0)">
+              ${doneCount > 0 ? "Lanjutkan Bab" : "Mulai Bab"}
+            </button>
+          </article>
+        `;
+      }).join("");
+
+      return `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+            <div>
+              <h2 style="margin:0 0 4px;font-size:1.1rem;">Peta 7 Bab — Kampus &amp; Kota Hanyu</h2>
+              <p style="margin:0;font-size:0.86rem;color:var(--muted);">
+                Setiap bab memuat misi Menyimak (Listening), Tata Bahasa, Susun Kalimat, Speaking, dan Boss Bab.
+              </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:0.82rem;color:var(--muted);">Tempo Suara:</span>
+              <button class="btn btn-outline btn-sm" onclick="setSpeechRate(0.75)">${speechRate === 0.75 ? "✓ " : ""}Pelan (0.75x)</button>
+              <button class="btn btn-outline btn-sm" onclick="setSpeechRate(0.9)">${speechRate === 0.9 ? "✓ " : ""}Normal (0.9x)</button>
+            </div>
+          </div>
+          <div class="chapter-grid">${cards}</div>
+        </div>
+      `;
+    }
+
+    function setSpeechRate(rate) {
+      speechRate = rate;
+      setMentor(`Tempo pengucapan Mandarin diatur ke ${rate}x.`);
+      renderCurrentTab();
+    }
+
+    function renderMissionView() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId) || CHAPTERS[0];
+      const mission = ch.missions[state.currentMissionIndex] || ch.missions[0];
+
+      if (state.mode === "tantangan" && state.energy <= 0) {
+        return `
+          <div class="card">
+            <h2 style="margin-top:0;">Energi Habis</h2>
+            <p style="color:var(--muted);">
+              Energi pulih 1 poin setiap 3 menit, atau kamu bisa beralih ke <strong>Mode Belajar</strong> maupun mengulas daftar <strong>Perlu Diulang</strong>.
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="setMode('belajar')">Pindah ke Mode Belajar</button>
+              <button class="btn btn-outline" onclick="switchTab('ulang')">Buka Perlu Diulang</button>
+            </div>
+          </div>
+        `;
+      }
+
+      let stimulusHtml = "";
+      if (mission.type === "listening" && mission.dialogue) {
+        stimulusHtml = `
+          <div style="margin:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <button class="btn btn-accent btn-sm" onclick="speakChinese('${escapeAttr(mission.audioText)}')">Putar Audio Dialog</button>
+            <button class="btn btn-outline btn-sm" onclick="speakChineseSlow('${escapeAttr(mission.audioText)}')">Putar Pelan</button>
+          </div>
+          <div class="dialogue-box">
+            ${mission.dialogue.map((turn) => `
+              <div class="dialogue-turn">
+                <div class="speaker-label">${escapeHtml(turn.speaker)}</div>
+                <div style="font-size:1.12rem;font-weight:700;">${escapeHtml(turn.hanzi)}</div>
+                <div style="font-size:0.86rem;color:var(--primary);font-weight:600;">${escapeHtml(turn.pinyin)}</div>
+                <div style="font-size:0.83rem;color:var(--muted);">${escapeHtml(turn.meaning)}</div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      } else {
+        stimulusHtml = `
+          ${mission.hanzi ? `<div class="hanzi-display">${escapeHtml(mission.hanzi)}</div>` : ""}
+          ${mission.pinyin ? `<div class="pinyin-display">${escapeHtml(mission.pinyin)}</div>` : ""}
+          ${mission.meaning ? `<div class="meaning-display">Arti: ${escapeHtml(mission.meaning)}</div>` : ""}
+        `;
+      }
+
+      let bodyHtml = "";
+      if (mission.type === "choice" || mission.type === "listening") {
+        bodyHtml = `
+          <div class="options-list">
+            ${mission.options.map((opt, idx) => `
+              <button class="option-btn ${selectedOption === idx ? "selected" : ""}" onclick="pickOption(${idx})">
+                ${escapeHtml(opt)}
+              </button>
+            `).join("")}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn btn-primary" onclick="checkChoice()" ${selectedOption === null ? "disabled" : ""}>Periksa Jawaban</button>
+            <button class="btn btn-outline btn-sm" onclick="showNextHint()">Petunjuk (${hintLevel}/${mission.hints.length})</button>
+          </div>
+        `;
+      } else if (mission.type === "order") {
+        const remaining = [];
+        const temp = [...builtTokens];
+        for (const tok of mission.tokens) {
+          const foundIdx = temp.indexOf(tok);
+          if (foundIdx !== -1) temp.splice(foundIdx, 1);
+          else remaining.push(tok);
+        }
+        bodyHtml = `
+          <div style="font-size:0.84rem;color:var(--muted);">Susunan kalimatmu (klik token untuk melepas):</div>
+          <div class="builder-target">
+            ${builtTokens.length === 0
+              ? `<span style="color:var(--muted);font-size:0.85rem;">Belum ada kata dipilih...</span>`
+              : builtTokens.map((t, i) => `<button class="token-chip" onclick="removeToken(${i})">${escapeHtml(t)}</button>`).join("")}
+          </div>
+          <div style="font-size:0.84rem;color:var(--muted);">Pilihan kata:</div>
+          <div class="builder-pool">
+            ${remaining.map((t) => `<button class="token-chip" onclick="addToken('${escapeAttr(t)}')">${escapeHtml(t)}</button>`).join("")}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button class="btn btn-primary" onclick="checkOrder()" ${builtTokens.length === 0 ? "disabled" : ""}>Periksa Susunan</button>
+            <button class="btn btn-outline btn-sm" onclick="clearTokens()">Reset</button>
+            <button class="btn btn-outline btn-sm" onclick="showNextHint()">Petunjuk (${hintLevel}/${mission.hints.length})</button>
+          </div>
+        `;
+      } else if (mission.type === "speaking") {
+        bodyHtml = `
+          <div class="speaking-panel">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <button class="btn btn-accent btn-sm" onclick="speakChinese('${escapeAttr(mission.hanzi)}')">Dengar Contoh</button>
+              <button class="btn btn-outline btn-sm" onclick="speakChineseSlow('${escapeAttr(mission.hanzi)}')">Dengar Pelan</button>
+              <button class="btn btn-outline btn-sm" id="recBtn" onclick="toggleRecording()">Rekam Suara</button>
+              <button class="btn btn-outline btn-sm" onclick="trySpeechRecognition('${escapeAttr(mission.hanzi)}')">Cek Suara Otomatis</button>
+              <button class="btn btn-primary btn-sm" onclick="confirmSpeakingManual()">Saya Sudah Mengucapkan dengan Lantang</button>
+            </div>
+            <div id="recordedAudioBox" style="margin-top:10px;">
+              ${recordedUrl ? `<audio controls src="${recordedUrl}"></audio>` : ""}
+            </div>
+            <div class="audio-status" id="speakingStatus">
+              ${speakingVerified
+                ? "Ucapan sudah tercatat! Lanjutkan ke misi berikutnya."
+                : "Tips: dengarkan contohnya, ucapkan lantang, lalu rekam atau klik tombol konfirmasi."}
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="showNextHint()">Petunjuk (${hintLevel}/${mission.hints.length})</button>
+          </div>
+        `;
+      }
+
+      const feedbackHtml = lastFeedback
+        ? `<div class="feedback-box ${lastFeedback.kind}">${lastFeedback.html}</div>`
+        : "";
+
+      const isCompleted = !!state.completedMissions[mission.id];
+      const isBoss = state.currentMissionIndex === ch.missions.length - 1;
+
+      return `
+        <div class="card">
+          <div class="mission-header">
+            <div>
+              <span class="tag">${escapeHtml(ch.title)}</span>
+              <span class="tag ${isBoss ? "boss" : "ok"}">${escapeHtml(mission.topic)}</span>
+              ${isCompleted ? `<span class="tag warn">Sudah Tuntas</span>` : ""}
+            </div>
+            <div style="font-size:0.84rem;color:var(--muted);">
+              Misi ${state.currentMissionIndex + 1} dari ${ch.missions.length}
+            </div>
+          </div>
+
+          <p style="margin:0 0 8px;font-weight:600;">${escapeHtml(mission.prompt)}</p>
+          ${stimulusHtml}
+          ${bodyHtml}
+          ${feedbackHtml}
+
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="prevMission()" ${state.currentMissionIndex === 0 ? "disabled" : ""}>← Misi Sebelumnya</button>
+            <button class="btn btn-primary btn-sm" onclick="nextMission()">
+              ${state.currentMissionIndex < ch.missions.length - 1 ? "Misi Berikutnya →" : "Selesaikan Bab"}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function pickOption(idx) {
+      selectedOption = idx;
+      renderCurrentTab();
+    }
+
+    function addToken(tok) {
+      builtTokens.push(tok);
+      renderCurrentTab();
+    }
+
+    function removeToken(index) {
+      builtTokens.splice(index, 1);
+      renderCurrentTab();
+    }
+
+    function clearTokens() {
+      builtTokens = [];
+      renderCurrentTab();
+    }
+
+    function showNextHint() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+      const mission = ch.missions[state.currentMissionIndex];
+      if (hintLevel < mission.hints.length) {
+        hintLevel += 1;
+      }
+      const visibleHints = mission.hints.slice(0, hintLevel).map((h, i) => `<div>• <strong>Petunjuk ${i + 1}:</strong> ${escapeHtml(h)}</div>`).join("");
+      lastFeedback = {
+        kind: "hint",
+        html: `<strong>Bantuan Bertingkat:</strong>${visibleHints}`
+      };
+      renderCurrentTab();
+    }
+
+    function enqueueReview(chapterId, missionId, reason) {
+      const exists = state.reviewQueue.some((item) => item.missionId === missionId);
+      if (!exists) {
+        state.reviewQueue.push({ chapterId, missionId, reason });
+      }
+    }
+
+    function markMissionSuccess(ch, mission, bonusXp = 25) {
+      const firstTime = !state.completedMissions[mission.id];
+      state.completedMissions[mission.id] = true;
+      state.consecutiveCorrect += 1;
+      state.consecutiveWrong = 0;
+
+      const streakBonus = state.consecutiveCorrect >= 2 ? 5 : 0;
+      const gained = (firstTime ? bonusXp : 10) + streakBonus;
+      state.xp += gained;
+
+      state.reviewQueue = state.reviewQueue.filter((item) => item.missionId !== mission.id);
+
+      const doneInChapter = ch.missions.filter((m) => state.completedMissions[m.id]).length;
+      const ratio = doneInChapter / ch.missions.length;
+      const stars = ratio >= 1 ? 3 : ratio >= 0.6 ? 2 : 1;
+      state.chapterStars[ch.id] = Math.max(state.chapterStars[ch.id] || 0, stars);
+
+      if (ratio >= 1 && !state.badges.includes(ch.badgeName)) {
+        state.badges.push(ch.badgeName);
+      }
+
+      const pacingNote = state.consecutiveCorrect >= 2
+        ? "Ritmemu mantap—lanjutkan ke misi berikutnya!"
+        : "Bagus! Pemahaman dan ketepatanmu makin solid.";
+
+      lastFeedback = {
+        kind: "ok",
+        html: `<strong>Tepat! (+${gained} XP)</strong> — ${escapeHtml(mission.explain)}<div style="margin-top:4px;font-size:0.84rem;">${escapeHtml(pacingNote)}</div>`
+      };
+      setMentor(pacingNote);
+      saveState();
+      renderCurrentTab();
+    }
+
+    function markMissionWrong(ch, mission, detailText) {
+      state.consecutiveWrong += 1;
+      state.consecutiveCorrect = 0;
+
+      if (state.mode === "tantangan") {
+        state.energy = Math.max(0, state.energy - 1);
+      }
+
+      enqueueReview(ch.id, mission.id, mission.topic);
+
+      const gentleNote = state.consecutiveWrong >= 2
+        ? "Tenang, kita pelan-pelan dulu ya. Gunakan tombol Petunjuk dan fokus pada kata kuncinya."
+        : "Belum pas—simak penjelasannya dulu, dan soal ini sudah masuk ke daftar Perlu Diulang.";
+
+      lastFeedback = {
+        kind: "err",
+        html: `<strong>Belum tepat.</strong> ${escapeHtml(detailText)} <br/><em>Penjelasan:</em> ${escapeHtml(mission.explain)} <div style="margin-top:4px;font-size:0.84rem;">Masuk otomatis ke antrean <strong>Perlu Diulang</strong>.</div>`
+      };
+      setMentor(gentleNote);
+      saveState();
+      renderCurrentTab();
+    }
+
+    function checkChoice() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+      const mission = ch.missions[state.currentMissionIndex];
+      if (selectedOption === null) return;
+
+      if (selectedOption === mission.answer) {
+        markMissionSuccess(ch, mission, 25);
+      } else {
+        markMissionWrong(ch, mission, `Pilihan yang benar adalah: ${mission.options[mission.answer]}.`);
+      }
+    }
+
+    function checkOrder() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+      const mission = ch.missions[state.currentMissionIndex];
+      const isMatch =
+        builtTokens.length === mission.answer.length &&
+        builtTokens.every((tok, idx) => tok === mission.answer[idx]);
+
+      if (isMatch) {
+        markMissionSuccess(ch, mission, 30);
+      } else {
+        markMissionWrong(ch, mission, `Susunan yang tepat: ${mission.answer.join(" ")}.`);
+      }
+    }
+
+    function speakChinese(text) {
+      playTTS(text, speechRate);
+    }
+
+    function speakChineseSlow(text) {
+      playTTS(text, 0.72);
+    }
+
+    function playTTS(text, rateVal) {
+      if (!("speechSynthesis" in window)) {
+        setMentor("Browser ini belum mendukung pembaca suara otomatis, jadi kamu bisa melafalkannya langsung berdasarkan pinyin & arti.");
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "zh-CN";
+      utter.rate = rateVal;
+      window.speechSynthesis.speak(utter);
+    }
+
+    async function toggleRecording() {
+      const btn = document.getElementById("recBtn");
+      const status = document.getElementById("speakingStatus");
+
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        if (btn) btn.textContent = "Rekam Suara";
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (status) status.textContent = "Perekam mikrofon tidak tersedia di browser ini. Gunakan tombol 'Saya Sudah Mengucapkan dengan Lantang'.";
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+          recordedUrl = URL.createObjectURL(blob);
+          speakingVerified = true;
+          const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+          const mission = ch.missions[state.currentMissionIndex];
+          state.speakingDoneCount += 1;
+          markMissionSuccess(ch, mission, 30);
+        };
+        mediaRecorder.start();
+        if (btn) btn.textContent = "Stop Rekaman";
+        if (status) status.textContent = "Sedang merekam suaramu... ucapkan kalimatnya lalu klik Stop Rekaman.";
+      } catch {
+        if (status) status.textContent = "Izin mikrofon ditolak atau tidak aktif. Kamu tetap bisa klik 'Saya Sudah Mengucapkan dengan Lantang'.";
+      }
+    }
+
+    function trySpeechRecognition(targetHanzi) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const status = document.getElementById("speakingStatus");
+      if (!SpeechRec) {
+        if (status) status.textContent = "Pengenalan suara otomatis belum tersedia di browser ini; pakai Rekam Suara atau tombol konfirmasi manual.";
+        return;
+      }
+      const rec = new SpeechRec();
+      rec.lang = "zh-CN";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      if (status) status.textContent = "Mendengarkan ucapan Mandarinmu...";
+
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript || "";
+        speakingVerified = true;
+        const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+        const mission = ch.missions[state.currentMissionIndex];
+        state.speakingDoneCount += 1;
+        markMissionSuccess(ch, mission, 35);
+        lastFeedback.html += `<div style="margin-top:4px;font-size:0.84rem;">Terdeteksi: <strong>${escapeHtml(transcript)}</strong> (Target: ${escapeHtml(targetHanzi)})</div>`;
+        renderCurrentTab();
+      };
+
+      rec.onerror = () => {
+        if (status) status.textContent = "Tidak menangkap suara dengan jelas. Coba lagi atau gunakan tombol 'Saya Sudah Mengucapkan dengan Lantang'.";
+      };
+
+      rec.start();
+    }
+
+    function confirmSpeakingManual() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+      const mission = ch.missions[state.currentMissionIndex];
+      speakingVerified = true;
+      state.speakingDoneCount += 1;
+      markMissionSuccess(ch, mission, 25);
+    }
+
+    function nextMission() {
+      const ch = CHAPTERS.find((c) => c.id === state.currentChapterId);
+      resetMissionScratch();
+      if (state.currentMissionIndex < ch.missions.length - 1) {
+        state.currentMissionIndex += 1;
+        saveState();
+        renderCurrentTab();
+      } else {
+        setMentor(`${ch.title} selesai! Kamu bisa mengulang bab ini atau memilih bab berikutnya di Peta 7 Bab.`);
+        state.activeTab = "peta";
+        saveState();
+        document.querySelectorAll(".tab-btn").forEach((b) => {
+          b.classList.toggle("active", b.dataset.tab === "peta");
+        });
+        renderCurrentTab();
+      }
+    }
+
+    function prevMission() {
+      if (state.currentMissionIndex > 0) {
+        resetMissionScratch();
+        state.currentMissionIndex -= 1;
+        saveState();
+        renderCurrentTab();
+      }
+    }
+
+    function setVocabFilter(val) {
+      state.vocabFilter = val;
+      renderCurrentTab();
+    }
+
+    function setVocabSearch(val) {
+      state.vocabSearch = val;
+      renderCurrentTab();
+    }
+
+    function renderVocabView() {
+      const groups = ["Semua", "Bab 1", "Bab 2", "Bab 3", "Bab 4", "Bab 5", "Bab 6", "Bab 7"];
+      const q = (state.vocabSearch || "").toLowerCase().trim();
+      const filtered = VOCAB_BANK.filter((item) => {
+        const matchGroup = state.vocabFilter === "Semua" || item.ch === state.vocabFilter;
+        const matchText =
+          !q ||
+          item.hanzi.toLowerCase().includes(q) ||
+          item.pinyin.toLowerCase().includes(q) ||
+          item.meaning.toLowerCase().includes(q) ||
+          item.note.toLowerCase().includes(q);
+        return matchGroup && matchText;
+      });
+
+      const rows = filtered.map((v) => `
+        <tr>
+          <td><span class="tag">${escapeHtml(v.ch)}</span></td>
+          <td style="font-size:1.05rem;font-weight:700;">${escapeHtml(v.hanzi)}</td>
+          <td style="color:var(--primary);font-weight:600;">${escapeHtml(v.pinyin)}</td>
+          <td>${escapeHtml(v.meaning)}</td>
+          <td style="color:var(--muted);font-size:0.83rem;">${escapeHtml(v.note)}</td>
+          <td><button class="btn btn-outline btn-sm" onclick="speakChinese('${escapeAttr(v.hanzi.split('/')[0].trim())}')">Dengar</button></td>
+        </tr>
+      `).join("");
+
+      return `
+        <div class="card">
+          <h2 style="margin-top:0;">Kamus Inti &amp; Pola Kalimat (7 Bab)</h2>
+          <p style="color:var(--muted);font-size:0.86rem;">Klik tombol <strong>Dengar</strong> untuk melatih pelafalan kosakata &amp; pola kalimat kapan saja.</p>
+          <div class="filter-bar">
+            <input
+              class="search-input"
+              type="text"
+              placeholder="Cari Hanzi, pinyin, arti, atau catatan tata bahasa..."
+              value="${escapeAttr(state.vocabSearch || "")}"
+              oninput="setVocabSearch(this.value)"
+            />
+          </div>
+          <div class="badge-row" style="margin-bottom:12px;">
+            ${groups.map((g) => `
+              <button class="btn btn-sm ${state.vocabFilter === g ? "btn-primary" : "btn-outline"}" onclick="setVocabFilter('${g}')">${g}</button>
+            `).join("")}
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="vocab-table">
+              <thead>
+                <tr>
+                  <th>Bab</th>
+                  <th>Hanzi</th>
+                  <th>Pinyin</th>
+                  <th>Arti</th>
+                  <th>Catatan Pola</th>
+                  <th>Audio</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows || `<tr><td colspan="6" style="color:var(--muted);">Tidak ada kosakata yang cocok dengan pencarian.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReviewView() {
+      if (state.reviewQueue.length === 0) {
+        return `
+          <div class="card">
+            <h2 style="margin-top:0;">Antrean Perlu Diulang</h2>
+            <p style="color:var(--muted);margin:0;">
+              Belum ada misi yang perlu diulang saat ini. Setiap jawaban yang belum tepat akan otomatis masuk ke sini untuk pengulangan berjarak.
+            </p>
+          </div>
+        `;
+      }
+
+      const itemsHtml = state.reviewQueue.map((item) => {
+        const m = findMission(item.chapterId, item.missionId);
+        const ch = CHAPTERS.find((c) => c.id === item.chapterId);
+        const idx = ch ? ch.missions.findIndex((x) => x.id === item.missionId) : 0;
+        if (!m) return "";
+        return `
+          <div class="review-item">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="tag warn">${escapeHtml(item.reason)}</span>
+              <button class="btn btn-primary btn-sm" onclick="startChapter('${item.chapterId}', ${idx})">Latih Lagi</button>
+            </div>
+            <p style="margin:8px 0 4px;font-weight:600;">${escapeHtml(m.prompt)}</p>
+            ${m.hanzi ? `<div style="font-size:1.15rem;font-weight:700;">${escapeHtml(m.hanzi)}</div>` : ""}
+            <div style="font-size:0.86rem;color:var(--muted);margin-top:4px;">${escapeHtml(m.explain)}</div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <div class="card">
+          <h2 style="margin-top:0;">Antrean Perlu Diulang (${state.reviewQueue.length})</h2>
+          <p style="color:var(--muted);font-size:0.88rem;">Ulangi misi yang sempat terlewat agar semakin lengket di ingatan.</p>
+          ${itemsHtml}
+        </div>
+      `;
+    }
+
+    function renderProfileView() {
+      const totalMissions = CHAPTERS.reduce((acc, c) => acc + c.missions.length, 0);
+      const doneTotal = Object.keys(state.completedMissions).length;
+      const badgeList = state.badges.length > 0
+        ? state.badges.map((b) => `<span class="tag ok">${escapeHtml(b)}</span>`).join("")
+        : `<span style="color:var(--muted);font-size:0.88rem;">Belum ada lencana terbuka—selesaikan seluruh misi dalam satu bab untuk mendapatkannya.</span>`;
+
+      return `
+        <div class="card">
+          <h2 style="margin-top:0;">Profil &amp; Pencapaian</h2>
+          <p style="margin:0 0 12px;color:var(--muted);font-size:0.9rem;">
+            Pemain: <strong>Rafi</strong> • Level <strong>${getLevel(state.xp)}</strong> • Total XP: <strong>${state.xp}</strong> • Sesi Speaking Tuntas: <strong>${state.speakingDoneCount}</strong>
+          </p>
+          <p style="margin:0 0 12px;font-size:0.9rem;">
+            Progres Keseluruhan: <strong>${doneTotal}/${totalMissions}</strong> misi selesai.
+          </p>
+          <div style="margin-bottom:14px;">
+            <div style="font-weight:600;margin-bottom:6px;">Lencana Terkumpul:</div>
+            <div class="badge-row">${badgeList}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="resetProgress()">Reset Progres Lokal</button>
+        </div>
+      `;
+    }
+
+    function resetProgress() {
+      localStorage.removeItem(STORAGE_KEY);
+      state = loadState();
+      resetMissionScratch();
+      setMentor("Progres lokal sudah direset. Yuk mulai lagi dari Bab 1 dengan santai!");
+      renderCurrentTab();
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function escapeAttr(str) {
+      return String(str ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+
+    renderCurrentTab();
+  </script>
+</body>
+</html>

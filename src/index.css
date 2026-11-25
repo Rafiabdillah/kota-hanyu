@@ -1,0 +1,99 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: "Plus Jakarta Sans", "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .font-mono-num {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hanzi-text {
+    font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Heiti SC", sans-serif;
+  }
+}
+
+/* Custom thin scrollbars inside drawers/modals without horizontal overflow */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+
+.dark .custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.55);
+}
+
+@keyframes teacherBreathe {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.01);
+  }
+}
+
+@keyframes teacherPointer {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes toastPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.teacher-breathe {
+  animation: teacherBreathe 3.2s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.teacher-pointer {
+  animation: teacherPointer 1.6s ease-in-out infinite;
+  transform-origin: 72px 86px;
+}
+
+.animate-toast-pop {
+  animation: toastPop 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-breathe,
+  .teacher-pointer,
+  .animate-toast-pop {
+    animation: none;
+  }
+}

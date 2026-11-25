@@ -1,0 +1,10 @@
+{
+  "name": "Remix Remix Kota \u0026 Kampus Hanyu",
+  "description": "Game belajar bahasa Mandarin hanyu interaktif 3D berbasis kurikulum Developing Chinese Elementary Speaking \u0026 Listening 1, dilengkapi latihan suara real-time Gemini Live API.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
