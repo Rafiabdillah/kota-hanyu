@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   ArrowRight,
@@ -22,7 +22,10 @@ import {
   getAdaptiveStanding,
   getChapterProgress,
   getDueReviewItemsForChapter,
+  getQuizCorrectCount,
   isBossMastered,
+  isPracticeComplete,
+  isQuizMastered,
   isStageUnlocked,
   type DynamicGeneratedQuestion,
 } from "../game/engine";
@@ -62,7 +65,7 @@ interface ChapterModalProps {
   ) => void;
   onChangeSpeechRate?: (rate: number) => void;
   onRecoverEnergy?: () => void;
-  onAwardDynamicXp?: (xp: number) => void;
+  onAwardDynamicXp?: (xp: number) => number;
   onResolveReviewOutcome?: (
     question: QuizQuestion,
     isCorrect: boolean,
@@ -109,13 +112,16 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
   const [showQuickRecap, setShowQuickRecap] = useState(false);
   const [showToneLab, setShowToneLab] = useState(chapter.id === "bab1");
   const [showPinyin, setShowPinyin] = useState(true);
+  const [dynamicRewardNote, setDynamicRewardNote] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   const initialCp = getChapterProgress(state, chapter.id);
   const firstPendingLatihan = chapter.latihan.findIndex(
     (t) => !initialCp.latihanDoneIds.includes(t.id),
   );
   const firstPendingQuiz = chapter.kuis.findIndex(
-    (q) => initialCp.kuisResults[q.id] === undefined,
+    (q) => initialCp.kuisResults[q.id] !== true,
   );
   const firstPendingBoss = chapter.boss.steps.findIndex(
     (s) => initialCp.bossResults?.[s.id] !== true,
@@ -147,6 +153,16 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
   useEffect(() => {
     return () => {
       stopSpeaking();
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    titleRef.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
     };
   }, []);
 
@@ -213,7 +229,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
       if (showDynamicDrill) {
         return {
           mood: "thinking" as TeacherMood,
-          text: "Ini soal acak dinamis! Kerjakan tanpa menghafal urutan jawaban untuk mengasah refleksmu (+15 XP).",
+          text: "Ini soal acak dinamis! Kerjakan tanpa menghafal urutan jawaban. Bonus XP tersedia untuk 3 jawaban benar pertama setiap hari.",
         };
       }
       return {
@@ -375,10 +391,42 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/65 p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="chapter-modal-title"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((element) => element.getClientRects().length > 0);
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) {
+          event.preventDefault();
+          return;
+        }
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement) || !focusable.includes(active)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+        } else if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
     >
       <div className="flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         {/* Top Modal Header */}
@@ -388,8 +436,10 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               Bab {chapter.order} · {chapter.npcName}
             </div>
             <h2
+              ref={titleRef}
               id="chapter-modal-title"
-              className="text-base font-extrabold leading-snug text-slate-900 dark:text-white sm:text-lg"
+              tabIndex={-1}
+              className="text-base font-extrabold leading-snug text-slate-900 outline-none dark:text-white sm:text-lg"
             >
               {chapter.title}
             </h2>
@@ -405,6 +455,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               type="button"
               onClick={() => setShowPinyin((v) => !v)}
               aria-label={showPinyin ? "Sembunyikan Pinyin" : "Tampilkan Pinyin"}
+              aria-pressed={showPinyin}
               title="Tampilkan / Sembunyikan Pinyin pada latihan"
               className={`inline-flex h-9 items-center gap-1 rounded-lg border px-2 text-xs font-bold transition ${
                 !showPinyin
@@ -419,6 +470,8 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
             <button
               type="button"
               onClick={() => setShowCheatSheet((v) => !v)}
+              aria-expanded={showCheatSheet}
+              aria-controls="chapter-cheat-sheet"
               className={`inline-flex h-9 items-center gap-1 rounded-lg border px-2.5 text-xs font-bold transition ${
                 showCheatSheet
                   ? "border-blue-700 bg-blue-700 text-white"
@@ -442,22 +495,27 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
         </div>
 
         {/* 5-Stage Sequential Stepper Bar */}
-        <div className="custom-scroll flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-950/60 sm:px-6">
+        <nav
+          aria-label="Tahapan belajar bab"
+          className="custom-scroll flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-950/60 sm:px-6"
+        >
           {STAGES.map((st) => {
             const active = stage === st.id;
             const unlocked = isStageUnlocked(cp, chapter, st.id);
             const done =
               (st.id === "pembuka" && cp.pembukaDone) ||
               (st.id === "penjelasan" && cp.penjelasanDone) ||
-              (st.id === "latihan" && cp.latihanDoneIds.length >= chapter.latihan.length) ||
-              (st.id === "kuis" && Object.keys(cp.kuisResults).length >= chapter.kuis.length) ||
+              (st.id === "latihan" && isPracticeComplete(cp, chapter)) ||
+              (st.id === "kuis" && isQuizMastered(cp, chapter)) ||
               (st.id === "boss" && isBossMastered(cp, chapter));
 
             return (
               <button
                 key={st.id}
                 type="button"
-                disabled={!unlocked}
+                aria-disabled={!unlocked}
+                aria-current={active ? "step" : undefined}
+                aria-label={`${st.label}${!unlocked ? ", terkunci" : done ? ", selesai" : ""}`}
                 data-testid={`stage-tab-${st.id}`}
                 title={!unlocked ? "Selesaikan tahap sebelumnya untuk membuka" : st.label}
                 onClick={() => unlocked && setStage(st.id)}
@@ -480,7 +538,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* Living Teacher Coach Strip */}
         <div
@@ -498,13 +556,15 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 dark:text-blue-300">
                 {chapter.npcName} · {chapter.npcRole}
               </span>
-              <div className="flex flex-wrap items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Kecepatan suara">
                 {onChangeSpeechRate &&
                   SPEECH_RATES.map((sr) => (
                     <button
                       key={sr.value}
                       type="button"
                       onClick={() => onChangeSpeechRate(sr.value)}
+                      aria-pressed={Math.abs(state.speechRate - sr.value) < 0.04}
+                      aria-label={`Kecepatan suara ${sr.label}`}
                       className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold transition ${
                         Math.abs(state.speechRate - sr.value) < 0.04
                           ? "bg-blue-700 text-white"
@@ -577,7 +637,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
 
           {/* Kartu Contekan Pop-in */}
           {showCheatSheet && (
-            <div className="mb-5 rounded-xl border border-blue-300 bg-blue-50/90 p-4 dark:border-blue-800 dark:bg-blue-950/50">
+            <div id="chapter-cheat-sheet" className="mb-5 rounded-xl border border-blue-300 bg-blue-50/90 p-4 dark:border-blue-800 dark:bg-blue-950/50">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-extrabold text-blue-950 dark:text-blue-100">
                   {chapter.penjelasan.cheatSheet.title}
@@ -892,6 +952,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                         onClick={() => {
                           setShowDynamicDrill((v) => !v);
                           setDynamicTask(generateDynamicPracticeTask(chapter.id));
+                          setDynamicRewardNote("");
                         }}
                         className={`inline-flex min-h-[32px] items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
                           showDynamicDrill
@@ -900,7 +961,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                         }`}
                       >
                         <Sparkles className="h-3.5 w-3.5" />
-                        {showDynamicDrill ? "Kembali ke Misi Pokok" : "Soal Acak Dinamis (+15 XP)"}
+                        {showDynamicDrill ? "Kembali ke Misi Pokok" : "Soal Acak Dinamis"}
                       </button>
                     </div>
                   </div>
@@ -914,7 +975,10 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                         <button
                           type="button"
                           data-testid="new-dynamic-question-btn"
-                          onClick={() => setDynamicTask(generateDynamicPracticeTask(chapter.id))}
+                          onClick={() => {
+                            setDynamicTask(generateDynamicPracticeTask(chapter.id));
+                            setDynamicRewardNote("");
+                          }}
                           className="inline-flex items-center gap-1 rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-xs font-bold text-purple-900 hover:bg-purple-100 dark:border-purple-700 dark:bg-slate-900 dark:text-purple-200"
                         >
                           <RefreshCw className="h-3 w-3" />
@@ -930,16 +994,30 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                         speechRate={state.speechRate}
                         showPinyin={showPinyin}
                         naturalTtsEnabled={state.naturalTtsEnabled}
+                        allowRetryOnWrong={true}
                         onSpeakingChange={setIsTeacherSpeaking}
                         onEvaluated={({ isCorrect }) => {
                           handleTeacherFeedback(isCorrect);
                           if (isCorrect) {
-                            onAwardDynamicXp?.(15);
+                            const xp = onAwardDynamicXp?.(15) ?? 0;
+                            setDynamicRewardNote(
+                              xp > 0
+                                ? `Benar! +${xp} XP.`
+                                : "Benar! Bonus 3 soal acak hari ini sudah tercapai; latihan tetap dilanjutkan.",
+                            );
                           }
                         }}
-                        onNext={() => setDynamicTask(generateDynamicPracticeTask(chapter.id))}
+                        onNext={() => {
+                          setDynamicTask(generateDynamicPracticeTask(chapter.id));
+                          setDynamicRewardNote("");
+                        }}
                         nextLabel="Buat Soal Acak Berikutnya"
                       />
+                      {dynamicRewardNote && (
+                        <p role="status" className="text-xs font-bold text-purple-900 dark:text-purple-200">
+                          {dynamicRewardNote}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <QuestionRenderer
@@ -951,6 +1029,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                       timedSeconds={timedSeconds}
                       showPinyin={showPinyin}
                       naturalTtsEnabled={state.naturalTtsEnabled}
+                      allowRetryOnWrong={true}
                       onSpeakingChange={setIsTeacherSpeaking}
                       onEvaluated={({ isCorrect, hintLevelUsed }) => {
                         handleTeacherFeedback(isCorrect);
@@ -964,6 +1043,13 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                         );
                       }}
                       onNext={() => {
+                        if (!isPracticeComplete(cp, chapter)) {
+                          const firstIncomplete = chapter.latihan.findIndex(
+                            (task) => !cp.latihanDoneIds.includes(task.id),
+                          );
+                          if (firstIncomplete >= 0) setLatihanIdx(firstIncomplete);
+                          return;
+                        }
                         if (latihanIdx + 1 < chapter.latihan.length) {
                           setLatihanIdx((i) => i + 1);
                         } else {
@@ -983,6 +1069,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               {/* STAGE 4: KUIS + SPACED REPETITION INJECTION */}
               {stage === "kuis" && (
                 <div className="space-y-4">
+                  {/* Variant retries do not emit outcomes; graded review and quiz use canonical retries. */}
                   {activeReviewWarmup ? (
                     <div
                       data-testid="spaced-repetition-warmup"
@@ -1003,12 +1090,13 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
 
                       <QuestionRenderer
                         key={activeReviewWarmup.question.id}
-                        question={activeReviewWarmup.question}
+                        question={{ ...activeReviewWarmup.question, variant: undefined }}
                         allowHints={true}
                         muted={state.muted}
                         speechRate={state.speechRate}
                         showPinyin={showPinyin}
                         naturalTtsEnabled={state.naturalTtsEnabled}
+                        allowRetryOnWrong={true}
                         onSpeakingChange={setIsTeacherSpeaking}
                         onEvaluated={({ isCorrect, hintLevelUsed }) => {
                           handleTeacherFeedback(isCorrect);
@@ -1029,19 +1117,20 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                           Soal Kuis {quizIdx + 1} dari {chapter.kuis.length} ({currentQuiz.kind.toUpperCase()})
                         </span>
                         <span>
-                          Terjawab: {Object.keys(cp.kuisResults).length}/{chapter.kuis.length}
+                          Benar: {getQuizCorrectCount(cp, chapter)}/{chapter.kuis.length}
                         </span>
                       </div>
 
                       <QuestionRenderer
                         key={currentQuiz.id}
-                        question={currentQuiz}
+                        question={{ ...currentQuiz, variant: undefined }}
                         allowHints={allowHints}
                         muted={state.muted}
                         speechRate={state.speechRate}
                         timedSeconds={timedSeconds}
                         showPinyin={showPinyin}
                         naturalTtsEnabled={state.naturalTtsEnabled}
+                        allowRetryOnWrong={true}
                         onSpeakingChange={setIsTeacherSpeaking}
                         onEvaluated={({ isCorrect, hintLevelUsed }) => {
                           handleTeacherFeedback(isCorrect);
@@ -1055,6 +1144,13 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                           );
                         }}
                         onNext={() => {
+                          if (!isQuizMastered(cp, chapter)) {
+                            const firstIncorrect = chapter.kuis.findIndex(
+                              (question) => cp.kuisResults[question.id] !== true,
+                            );
+                            if (firstIncorrect >= 0) setQuizIdx(firstIncorrect);
+                            return;
+                          }
                           if (quizIdx + 1 < chapter.kuis.length) {
                             setQuizIdx((i) => i + 1);
                           } else {
@@ -1073,7 +1169,24 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
               )}
 
               {/* STAGE 5: BOSS MULTI-STEP (REQUIRES CORRECT SOLUTION PER STEP) */}
-              {stage === "boss" && currentBossStep && (
+              {stage === "boss" && !isQuizMastered(cp, chapter) ? (
+                <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                  <strong>Boss masih terkunci.</strong> Jawab seluruh 5 soal kuis dengan benar sebelum melanjutkan.
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstIncorrect = chapter.kuis.findIndex(
+                        (question) => cp.kuisResults[question.id] !== true,
+                      );
+                      if (firstIncorrect >= 0) setQuizIdx(firstIncorrect);
+                      setStage("kuis");
+                    }}
+                    className="ml-3 min-h-[40px] rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-extrabold text-white"
+                  >
+                    Kembali ke Kuis
+                  </button>
+                </div>
+              ) : stage === "boss" && currentBossStep ? (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-purple-300 bg-purple-50 p-3.5 dark:border-purple-800 dark:bg-purple-950/50">
                     <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider text-purple-800 dark:text-purple-300">
@@ -1117,7 +1230,7 @@ export const ChapterModal: React.FC<ChapterModalProps> = ({
                     }
                   />
                 </div>
-              )}
+              ) : null}
             </>
           )}
         </div>

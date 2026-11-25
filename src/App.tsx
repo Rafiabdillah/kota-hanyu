@@ -11,20 +11,29 @@ import {
   createEmptyChapterProgress,
   getChapterProgress,
   getDailyQuests,
+  getQuizCorrectCount,
   getRecommendedStage,
   isBossMastered,
+  isPracticeComplete,
+  isQuizMastered,
   loadProgressState,
+  MAX_DAILY_VOICE_REWARD_TURNS,
+  recordChapterQuizOutcome,
+  recordDynamicPracticeXp,
   recordFlashcardReview,
   recordHanziPractice,
   recordLiveVoiceTurn,
   recordOrbCollected,
+  recordPracticeOutcome,
   recordQuizOutcome,
   recordToneDrillSolved,
+  recordWorldInteractionReward,
   recoverEnergyFromBreak,
   saveProgressState,
   type PlayerProgressState,
 } from "./game/engine";
 import { playSfx, speakMandarin } from "./game/audio";
+import { getAvatarStyle, sanitizeAvatarAppearance, type AvatarAppearance } from "./game/avatar";
 import { syncBgmState, unlockBgmAudio } from "./game/bgm";
 import { getNextCameraPreset, type CameraPreset } from "./game/cameraMath";
 import {
@@ -315,6 +324,21 @@ export default function App() {
     [mpEnabled, mpStatus, progress.muted, showToast],
   );
 
+  const handleSelectAppearance = useCallback(
+    (appearance: AvatarAppearance) => {
+      playSfx("click", progress.muted);
+      setMpProfile((prev) => {
+        const clean = sanitizeAvatarAppearance(appearance, prev.gender);
+        const gender = getAvatarStyle(clean.styleId).gender;
+        const next: MultiplayerProfile = { ...prev, gender, appearance: clean };
+        saveMultiplayerProfile(next);
+        mpClientRef.current?.updateProfile(next);
+        return next;
+      });
+    },
+    [progress.muted],
+  );
+
   const handleSelectGender = useCallback(
     (gender: AvatarGender) => {
       playSfx("click", progress.muted);
@@ -325,7 +349,15 @@ export default function App() {
         } else if (gender === "boy" && colorHex === "#ec4899") {
           colorHex = "#2563eb";
         }
-        const next: MultiplayerProfile = { ...prev, gender, colorHex };
+        const next: MultiplayerProfile = {
+          ...prev,
+          gender,
+          colorHex,
+          appearance: sanitizeAvatarAppearance(
+            { hairColor: prev.appearance.hairColor, skinTone: prev.appearance.skinTone },
+            gender,
+          ),
+        };
         saveMultiplayerProfile(next);
         mpClientRef.current?.updateProfile(next);
         return next;
@@ -377,8 +409,13 @@ export default function App() {
       propCooldownRef.current[prop.id] = now;
 
       if (prop.kind === "fountain") {
+        const reward = recordWorldInteractionReward(progress, prop.id, 10);
+        setProgress((prev) => recordWorldInteractionReward(prev, prop.id, 10).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(prop.title, "Hadiah pertama kali sudah diklaim. Kamu tetap bisa menikmati tempat ini.");
+          return;
+        }
         playSfx("orb", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 10 }));
         setLocalSocialBurst({ kind: "highfive", nonce: now });
         speakMandarin("万事如意", {
           muted: progress.muted,
@@ -389,8 +426,13 @@ export default function App() {
         return;
       }
       if (prop.kind === "lantern_rack") {
+        const reward = recordWorldInteractionReward(progress, prop.id, 12);
+        setProgress((prev) => recordWorldInteractionReward(prev, prop.id, 12).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(prop.title, "Hadiah pertama kali sudah diklaim. Lampion tetap bisa dinikmati.");
+          return;
+        }
         playSfx("victory", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 12 }));
         setLocalSocialBurst({ kind: "firework", nonce: now });
         speakMandarin("步步高升", {
           muted: progress.muted,
@@ -407,8 +449,13 @@ export default function App() {
           { hz: "心想事成", py: "Xīnxiǎng shìchéng", id: "Impian segera terwujud!", xp: 25 },
         ];
         const pick = fortunes[Math.floor(Math.random() * fortunes.length)];
+        const reward = recordWorldInteractionReward(progress, prop.id, pick.xp);
+        setProgress((prev) => recordWorldInteractionReward(prev, prop.id, pick.xp).nextState);
+        if (!reward.newlyClaimed) {
+          showToast("Gacha Aksara", "Kapsul pertama sudah diklaim. Tidak ada bonus XP tambahan.");
+          return;
+        }
         playSfx("achievement", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + pick.xp }));
         setLocalSocialBurst({ kind: "clap", nonce: now });
         speakMandarin(pick.hz, {
           muted: progress.muted,
@@ -420,9 +467,7 @@ export default function App() {
     },
     [
       handleToggleScooter,
-      progress.muted,
-      progress.naturalTtsEnabled,
-      progress.speechRate,
+      progress,
       showToast,
     ],
   );
@@ -434,35 +479,41 @@ export default function App() {
         return;
       }
       if (building.actionKind === "energy_cafe" || building.actionKind === "hangout_rest") {
+        const reward = recordWorldInteractionReward(progress, building.id, 10, 2);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 10, 2).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Hadiah pertama kali sudah diklaim. Energi akan pulih secara alami.");
+          return;
+        }
         playSfx("correct", progress.muted);
-        setProgress((prev) => {
-          const recovered = recoverEnergyFromBreak(prev, 2);
-          return { ...recovered, xp: recovered.xp + 10 };
-        });
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Energi Pulih +2 & +10 XP · Waktunya santai sejenak!",
+          `Energi Pulih +${reward.energyGained} & +${reward.xpGained} XP · Waktunya santai sejenak!`,
         );
         return;
       }
       if (building.actionKind === "hangout_snack") {
+        const reward = recordWorldInteractionReward(progress, building.id, 15, 1);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 15, 1).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Hadiah pertama kali sudah diklaim. Tidak ada XP atau energi tambahan.");
+          return;
+        }
         playSfx("orb", progress.muted);
-        setProgress((prev) => {
-          const recovered = recoverEnergyFromBreak(prev, 1);
-          return { ...recovered, xp: recovered.xp + 15 };
-        });
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Jajan Boba & Camilan Lezat! +15 XP & +1 Energi",
+          `Jajan Boba & Camilan Lezat! +${reward.xpGained} XP & +${reward.energyGained} Energi`,
         );
         return;
       }
       if (building.actionKind === "hangout_panda") {
+        const reward = recordWorldInteractionReward(progress, building.id, 15, 2);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 15, 2).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Hadiah pertama kali sudah diklaim. Panda tetap menyambutmu!");
+          return;
+        }
         playSfx("orb", progress.muted);
-        setProgress((prev) => {
-          const recovered = recoverEnergyFromBreak(prev, 2);
-          return { ...recovered, xp: recovered.xp + 15 };
-        });
         setLocalSocialBurst({ kind: "highfive", nonce: Date.now() });
         speakMandarin("熊猫很可爱", {
           muted: progress.muted,
@@ -471,41 +522,61 @@ export default function App() {
         });
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Panda lucu menyapamu! +2 Energi & +15 XP",
+          `Panda lucu menyapamu! +${reward.energyGained} Energi & +${reward.xpGained} XP`,
         );
         return;
       }
       if (building.actionKind === "hangout_music") {
+        const reward = recordWorldInteractionReward(progress, building.id, 15);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 15).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Konser sudah dinikmati; bonus pertama kali sudah diklaim.");
+          return;
+        }
         handleSendSocialEmote("dance");
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 15 }));
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Pertunjukan musik kampus dimulai! +15 XP",
+          `Pertunjukan musik kampus dimulai! +${reward.xpGained} XP`,
         );
         return;
       }
       if (building.actionKind === "hangout_dojo") {
+        const reward = recordWorldInteractionReward(progress, building.id, 20);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 20).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Latihan sudah diselesaikan; bonus pertama kali sudah diklaim.");
+          return;
+        }
         playSfx("correct", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 20 }));
         setLocalSocialBurst({ kind: "clap", nonce: Date.now() });
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Latihan fokus & seni bela diri selesai! +20 XP",
+          `Latihan fokus & seni bela diri selesai! +${reward.xpGained} XP`,
         );
         return;
       }
       if (building.actionKind === "hangout_gacha") {
+        const reward = recordWorldInteractionReward(progress, building.id, 20);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 20).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Suvenir pertama sudah diklaim. Tidak ada bonus XP tambahan.");
+          return;
+        }
         playSfx("achievement", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 20 }));
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Dapat Suvenir Kapsul Aksara Langka! +20 XP",
+          `Dapat Suvenir Kapsul Aksara Langka! +${reward.xpGained} XP`,
         );
         return;
       }
       if (building.actionKind === "hangout_observatory") {
+        const reward = recordWorldInteractionReward(progress, building.id, 18);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 18).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Pemandangan sudah dinikmati; bonus pertama kali sudah diklaim.");
+          return;
+        }
         playSfx("victory", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 18 }));
         setLocalSocialBurst({ kind: "firework", nonce: Date.now() });
         speakMandarin("看星星", {
           muted: progress.muted,
@@ -514,7 +585,7 @@ export default function App() {
         });
         showToast(
           `${building.title} (${building.hanziTitle})`,
-          "Meneropong bintang di atap Lt.3! +18 XP",
+          `Meneropong bintang di atap Lt.3! +${reward.xpGained} XP`,
         );
         return;
       }
@@ -523,12 +594,17 @@ export default function App() {
         return;
       }
       if (building.actionKind === "hangout_maze") {
+        const reward = recordWorldInteractionReward(progress, building.id, 20);
+        setProgress((prev) => recordWorldInteractionReward(prev, building.id, 20).nextState);
+        if (!reward.newlyClaimed) {
+          showToast(building.title, "Harta pertama sudah diklaim. Tidak ada bonus XP tambahan.");
+          return;
+        }
         playSfx("victory", progress.muted);
-        setProgress((prev) => ({ ...prev, xp: prev.xp + 20 }));
         setLocalSocialBurst({ kind: "firework", nonce: Date.now() });
         showToast(
           "Harta Taman Labirin Bambu (竹林迷宫)",
-          "Berhasil menembus labirin! Bonus +20 XP!",
+          `Berhasil menembus labirin! Bonus +${reward.xpGained} XP!`,
         );
         return;
       }
@@ -555,9 +631,7 @@ export default function App() {
       handleSendSocialEmote,
       handleToggleScooter,
       openGraduationScene,
-      progress.muted,
-      progress.naturalTtsEnabled,
-      progress.speechRate,
+      progress,
       showToast,
     ],
   );
@@ -568,6 +642,7 @@ export default function App() {
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((tag === "BUTTON" || tag === "A") && (e.code === "Space" || e.code === "Enter")) return;
 
       if (gameState === "title" && (e.code === "Enter" || e.code === "Space")) {
         e.preventDefault();
@@ -717,14 +792,17 @@ export default function App() {
   const chapterStarsMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const ch of MATERI.chapters) {
-      map[ch.id] = progress.chapters[ch.id]?.stars ?? 0;
+      map[ch.id] = computeChapterStars(getChapterProgress(progress, ch.id), ch);
     }
     return map;
   }, [progress.chapters]);
 
   const completedChaptersCount = useMemo(
-    () => Object.values(chapterStarsMap).filter((s) => s > 0).length,
-    [chapterStarsMap],
+    () =>
+      MATERI.chapters.filter((chapter) =>
+        isBossMastered(getChapterProgress(progress, chapter.id), chapter),
+      ).length,
+    [progress.chapters],
   );
 
   const hasSavedProgress =
@@ -793,37 +871,16 @@ export default function App() {
     hintLevel: number,
   ) => {
     playSfx(isCorrect ? "correct" : "wrong", progress.muted);
-    setProgress((prev) => {
-      const cpPrev = prev.chapters[chapterId] ?? createEmptyChapterProgress();
-      const alreadyDone = cpPrev.latihanDoneIds.includes(taskId);
-      const inReviewQueue = prev.reviewQueue.some((r) => r.questionId === taskId);
-      // Avoid repeat XP farming when replaying an already-completed task not queued for review
-      if (alreadyDone && !inReviewQueue && isCorrect) {
-        return prev;
-      }
-      const { nextState } = recordQuizOutcome(prev, {
+    setProgress((prev) =>
+      recordPracticeOutcome(prev, {
         questionId: taskId,
         chapterId,
         conceptTag,
         topic,
         isCorrect,
         hintLevel,
-      });
-      const cp = nextState.chapters[chapterId] ?? createEmptyChapterProgress();
-      const updatedDone = cp.latihanDoneIds.includes(taskId)
-        ? cp.latihanDoneIds
-        : [...cp.latihanDoneIds, taskId];
-      const ch = MATERI.chapters.find((c) => c.id === chapterId)!;
-      const nextCp = { ...cp, latihanDoneIds: updatedDone };
-      nextCp.stars = computeChapterStars(nextCp, ch);
-      return {
-        ...nextState,
-        chapters: {
-          ...nextState.chapters,
-          [chapterId]: nextCp,
-        },
-      };
-    });
+      }).nextState,
+    );
   };
 
   const handleRecordQuizOutcome = (
@@ -835,39 +892,16 @@ export default function App() {
     hintLevel: number,
   ) => {
     playSfx(isCorrect ? "correct" : "wrong", progress.muted);
-    setProgress((prev) => {
-      const cpPrev = prev.chapters[chapterId] ?? createEmptyChapterProgress();
-      const alreadyPassed = cpPrev.kuisResults[questionId] === true;
-      // Preserve previously earned mastery without repeat XP farming on casual replay
-      if (alreadyPassed) {
-        return prev;
-      }
-      const { nextState } = recordQuizOutcome(prev, {
+    setProgress((prev) =>
+      recordChapterQuizOutcome(prev, {
         questionId,
         chapterId,
         conceptTag,
         topic,
         isCorrect,
         hintLevel,
-      });
-      const cp = nextState.chapters[chapterId] ?? createEmptyChapterProgress();
-      const ch = MATERI.chapters.find((c) => c.id === chapterId)!;
-      const nextCp = {
-        ...cp,
-        kuisResults: {
-          ...cp.kuisResults,
-          [questionId]: isCorrect,
-        },
-      };
-      nextCp.stars = computeChapterStars(nextCp, ch);
-      return {
-        ...nextState,
-        chapters: {
-          ...nextState.chapters,
-          [chapterId]: nextCp,
-        },
-      };
-    });
+      }).nextState,
+    );
   };
 
   const handleRecordBossStep = (
@@ -881,12 +915,15 @@ export default function App() {
     const wasAlreadyMastered = isBossMastered(prevCp, ch);
     const previewResults = { ...(prevCp.bossResults ?? {}), [stepId]: isCorrect };
     const willMaster =
-      isLastStep && isCorrect && ch.boss.steps.every((s) => previewResults[s.id] === true);
+      isQuizMastered(prevCp, ch) &&
+      isCorrect &&
+      ch.boss.steps.every((s) => previewResults[s.id] === true);
 
     playSfx(!wasAlreadyMastered && willMaster ? "victory" : isCorrect ? "correct" : "wrong", progress.muted);
 
     setProgress((prev) => {
       const cp = prev.chapters[chapterId] ?? createEmptyChapterProgress();
+      if (!isQuizMastered(cp, ch)) return prev;
       const wasMasteredBefore = isBossMastered(cp, ch);
       const nextBossResults = { ...(cp.bossResults ?? {}), [stepId]: isCorrect };
       const nextSteps =
@@ -910,12 +947,11 @@ export default function App() {
       const alreadySolved = cp.bossResults?.[stepId] === true;
       const xpGain = isCorrect && !alreadySolved ? 35 : 0;
 
-      if (isLastStep && mastered && !wasMasteredBefore) {
-        const quizVals = Object.values(nextCp.kuisResults);
+      if (mastered && !wasMasteredBefore) {
         setVictoryInfo({
           chapterId,
-          stars: Math.max(1, nextCp.stars),
-          quizCorrect: quizVals.filter(Boolean).length,
+          stars: nextCp.stars,
+          quizCorrect: getQuizCorrectCount(nextCp, ch),
           quizTotal: ch.kuis.length,
           xpEarned: xpGain || 35,
         });
@@ -948,7 +984,18 @@ export default function App() {
         isCorrect,
         hintLevel,
       });
-      return nextState;
+      const chapter = MATERI.chapters.find((ch) => ch.id === q.chapterId);
+      if (!chapter || !chapter.kuis.some((quiz) => quiz.id === q.id)) return nextState;
+      const cp = nextState.chapters[q.chapterId] ?? createEmptyChapterProgress();
+      const nextCp = {
+        ...cp,
+        kuisResults: { ...cp.kuisResults, [q.id]: isCorrect },
+      };
+      nextCp.stars = computeChapterStars(nextCp, chapter);
+      return {
+        ...nextState,
+        chapters: { ...nextState.chapters, [q.chapterId]: nextCp },
+      };
     });
   };
 
@@ -969,11 +1016,10 @@ export default function App() {
 
   const handleClaimDailyQuest = (questId: string) => {
     const qInfo = getDailyQuests(progress).find((q) => q.id === questId);
+    if (!qInfo?.completed || qInfo.claimed) return;
     playSfx("achievement", progress.muted);
     setProgress((prev) => claimDailyQuestBonus(prev, questId).nextState);
-    if (qInfo) {
-      showToast(`Target Harian Selesai: ${qInfo.title}`, `Bonus +${qInfo.rewardXp} XP masuk ke akunmu`);
-    }
+    showToast(`Target Harian Selesai: ${qInfo.title}`, `Bonus +${qInfo.rewardXp} XP masuk ke akunmu`);
   };
 
   const victoryChapter = victoryInfo
@@ -1024,6 +1070,7 @@ export default function App() {
         collectedOrbIds={progress.collectedOrbIds}
         localJacketHex={mpProfile.colorHex}
         localGender={mpProfile.gender}
+        localAppearance={mpProfile.appearance}
         onScooter={onScooter}
         remotePlayersRef={remotePlayersRef}
         ballStateRef={ballStateRef}
@@ -1085,7 +1132,9 @@ export default function App() {
           totalOrbsCount={CAMPUS_ORBS.length}
           selectedGender={mpProfile.gender}
           selectedColorHex={mpProfile.colorHex}
+          selectedAppearance={mpProfile.appearance}
           onSelectGender={handleSelectGender}
+          onSelectAppearance={handleSelectAppearance}
           onSelectColor={handleSelectColor}
           onStart={startGame}
           onOpenCurriculumInfo={() => {
@@ -1107,6 +1156,11 @@ export default function App() {
           onScooter={onScooter}
           onToggleScooter={handleToggleScooter}
           avatarGender={mpProfile.gender}
+          avatarStyleLabel={getAvatarStyle(mpProfile.appearance.styleId).label}
+          onOpenCharacterCustomization={() => {
+            setMpInitialTab("room");
+            setMpOpen(true);
+          }}
           onToggleAvatarGender={() =>
             handleSelectGender(mpProfile.gender === "girl" ? "boy" : "girl")
           }
@@ -1230,8 +1284,9 @@ export default function App() {
             setProgress((prev) => recoverEnergyFromBreak(prev, 2));
           }}
           onAwardDynamicXp={(amount) => {
-            playSfx("correct", progress.muted);
-            setProgress((prev) => ({ ...prev, xp: prev.xp + amount }));
+            const reward = recordDynamicPracticeXp(progress, amount);
+            setProgress((prev) => recordDynamicPracticeXp(prev, amount).nextState);
+            return reward.xpGained;
           }}
           onResolveReviewOutcome={handleResolveReviewOutcome}
         />
@@ -1287,6 +1342,10 @@ export default function App() {
           chapters={MATERI.chapters}
           initialChapterId={progress.activeChapterId}
           naturalTtsEnabled={progress.naturalTtsEnabled}
+          voiceRewardsRemaining={Math.max(
+            0,
+            MAX_DAILY_VOICE_REWARD_TURNS - progress.dailyStats.voiceTurns,
+          )}
           onClose={() => setVoiceLabOpen(false)}
           onTurnAwardXp={() =>
             setProgress((prev) => recordLiveVoiceTurn(prev).nextState)
@@ -1320,6 +1379,7 @@ export default function App() {
           mpClientRef.current?.updateProfile(nextProfile);
           showToast("Profil Kampus Diperbarui", `${nextProfile.name} · Ruang ${nextProfile.roomId}`);
         }}
+        onSendSocialEmote={handleSendSocialEmote}
         onSendChat={(text, pinyin, emoteOnly, studyCard?: ChatStudyCard) => {
           const ok = mpClientRef.current?.sendChat(text, pinyin, emoteOnly, studyCard) ?? false;
           if (ok) playSfx("click", progress.muted);
@@ -1386,7 +1446,7 @@ export default function App() {
           quizTotal={victoryInfo.quizTotal}
           xpEarned={victoryInfo.xpEarned}
           hasNextChapter={Boolean(nextAfterVictory)}
-          canGraduate={graduationSummary.isEligible || !nextAfterVictory}
+          canGraduate={graduationSummary.isEligible}
           onOpenGraduation={openGraduationScene}
           onContinueCampus={() => setVictoryInfo(null)}
           onNextChapter={() => {

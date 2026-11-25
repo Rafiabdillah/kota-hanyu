@@ -1,15 +1,25 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import type { ChapterData } from "../data/types";
 import type { CampusOrbDef } from "../game/engine";
 import type {
-  AvatarGender,
   MiniGameSnapshot,
   RemotePlayerSnapshot,
   SharedBallState,
   SocialEmoteKind,
 } from "../game/multiplayer";
+import {
+  getAvatarStyle,
+  sanitizeAvatarAppearance,
+  type AvatarAppearance,
+  type AvatarGender,
+} from "../game/avatar";
 import {
   buildAllOpenWorldBuildings,
   computeFloorSupportY,
@@ -32,6 +42,7 @@ import {
   CAMERA_PRESETS,
   clampCameraDist,
   clampCameraPitch,
+  computeAdaptivePixelRatio,
   computeOrbitCameraFrame,
   computeResponsiveFov,
   getBehindPlayerCameraYaw,
@@ -58,6 +69,7 @@ interface CampusScene3DProps {
   collectedOrbIds?: string[];
   localJacketHex?: string;
   localGender?: AvatarGender;
+  localAppearance?: AvatarAppearance;
   onScooter?: boolean;
   remotePlayersRef?: React.MutableRefObject<Map<string, RemotePlayerSnapshot>>;
   ballStateRef?: React.MutableRefObject<SharedBallState>;
@@ -217,28 +229,95 @@ function createPaverTextures(): {
   return { map, bumpMap };
 }
 
-function createWallPlasterTexture(): THREE.CanvasTexture {
+function createWallPlasterTextures(): {
+  map: THREE.CanvasTexture;
+  bumpMap: THREE.CanvasTexture;
+} {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext("2d")!;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = 256;
+  bumpCanvas.height = 256;
+  const bumpCtx = bumpCanvas.getContext("2d")!;
   ctx.fillStyle = "#f7f3ea";
   ctx.fillRect(0, 0, 256, 256);
+  bumpCtx.fillStyle = "#bcbcbc";
+  bumpCtx.fillRect(0, 0, 256, 256);
 
   for (let i = 0; i < 900; i += 1) {
     const px = Math.abs((Math.sin(i * 31.1) * 4211.4) % 1) * 256;
     const py = Math.abs((Math.cos(i * 17.9) * 8192.3) % 1) * 256;
     ctx.fillStyle = i % 2 === 0 ? "rgba(205, 194, 174, 0.16)" : "rgba(255, 255, 255, 0.25)";
     ctx.fillRect(px, py, 4, 2);
+    const shade = 168 + (i % 5) * 12;
+    bumpCtx.fillStyle = `rgb(${shade},${shade},${shade})`;
+    bumpCtx.fillRect(px, py, 3, 2);
   }
   ctx.fillStyle = "rgba(180, 168, 148, 0.22)";
   ctx.fillRect(0, 224, 256, 32);
+  bumpCtx.fillStyle = "#a8a8a8";
+  bumpCtx.fillRect(0, 224, 256, 32);
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  return tex;
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+  bumpMap.wrapS = THREE.RepeatWrapping;
+  bumpMap.wrapT = THREE.RepeatWrapping;
+  return { map, bumpMap };
+}
+
+function createTimberTextures(): {
+  map: THREE.CanvasTexture;
+  bumpMap: THREE.CanvasTexture;
+} {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = 256;
+  bumpCanvas.height = 256;
+  const bumpCtx = bumpCanvas.getContext("2d")!;
+  ctx.fillStyle = "#80502f";
+  ctx.fillRect(0, 0, 256, 256);
+  bumpCtx.fillStyle = "#b8b8b8";
+  bumpCtx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 70; i += 1) {
+    const x = (i * 37) % 256;
+    const wobble = 2 + (i % 4);
+    ctx.strokeStyle = i % 3 === 0 ? "rgba(48,24,12,0.28)" : "rgba(238,184,120,0.16)";
+    ctx.lineWidth = i % 5 === 0 ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    for (let y = 0; y <= 256; y += 16) {
+      ctx.lineTo(x + Math.sin(y * 0.045 + i) * wobble, y);
+    }
+    ctx.stroke();
+    bumpCtx.strokeStyle = i % 3 === 0 ? "#898989" : "#d0d0d0";
+    bumpCtx.lineWidth = i % 5 === 0 ? 2 : 1;
+    bumpCtx.beginPath();
+    bumpCtx.moveTo(x, 0);
+    for (let y = 0; y <= 256; y += 16) {
+      bumpCtx.lineTo(x + Math.sin(y * 0.045 + i) * wobble, y);
+    }
+    bumpCtx.stroke();
+  }
+
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(1, 2);
+  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+  bumpMap.wrapS = THREE.RepeatWrapping;
+  bumpMap.wrapT = THREE.RepeatWrapping;
+  bumpMap.repeat.set(1, 2);
+  return { map, bumpMap };
 }
 
 function createRoofTileBumpTexture(): THREE.CanvasTexture {
@@ -283,6 +362,36 @@ function createContactShadowMaterial(): THREE.MeshBasicMaterial {
     depthWrite: false,
     opacity: 0.72,
   });
+}
+
+function createCloudTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  const puffs = [
+    [72, 74, 44],
+    [116, 56, 50],
+    [158, 72, 42],
+    [188, 82, 30],
+  ];
+  for (const [x, y, radius] of puffs) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1.25, 0.82);
+    const grad = ctx.createRadialGradient(0, 0, radius * 0.18, 0, 0, radius);
+    grad.addColorStop(0, "rgba(255,255,255,0.92)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.68)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function buildOrbSprite(shortHanzi: string, accentHex: string): THREE.Sprite {
@@ -390,7 +499,7 @@ function drawSpeechBubbleCanvas(
 
 function buildPlayerAvatar(
   jacketHex = "#1d4ed8",
-  initialGender: AvatarGender = "boy",
+  initialAppearance: AvatarAppearance = sanitizeAvatarAppearance(),
 ): {
   root: THREE.Group;
   leftLeg: THREE.Mesh;
@@ -407,6 +516,7 @@ function buildPlayerAvatar(
   scooterGroup: THREE.Group;
   frontWheel: THREE.Mesh;
   rearWheel: THREE.Mesh;
+  setAppearance: (appearance: AvatarAppearance, gradActive?: boolean) => void;
   setGender: (g: AvatarGender, gradActive?: boolean) => void;
   setScooter: (active: boolean) => void;
   getGender: () => AvatarGender;
@@ -428,7 +538,7 @@ function buildPlayerAvatar(
   const visorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.18, metalness: 0.42 });
 
   // Shared Articulated Limbs
-  const legGeo = new THREE.BoxGeometry(0.24, 0.68, 0.26);
+  const legGeo = new RoundedBoxGeometry(0.24, 0.68, 0.26, 2, 0.055);
   legGeo.translate(0, -0.34, 0);
   const leftLeg = new THREE.Mesh(legGeo, pantsMat);
   leftLeg.position.set(-0.17, 0.72, 0);
@@ -438,7 +548,7 @@ function buildPlayerAvatar(
   rightLeg.position.set(0.17, 0.72, 0);
   rightLeg.castShadow = true;
 
-  const shoeGeo = new THREE.BoxGeometry(0.26, 0.12, 0.37);
+  const shoeGeo = new RoundedBoxGeometry(0.26, 0.12, 0.37, 2, 0.045);
   const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
   leftShoe.position.set(0, -0.66, 0.04);
   leftLeg.add(leftShoe);
@@ -464,7 +574,7 @@ function buildPlayerAvatar(
   rightLeg.add(sockR, mjR);
   void girlLegTrim;
 
-  const armGeo = new THREE.BoxGeometry(0.16, 0.56, 0.18);
+  const armGeo = new RoundedBoxGeometry(0.16, 0.56, 0.18, 2, 0.045);
   armGeo.translate(0, -0.24, 0);
   const leftArm = new THREE.Mesh(armGeo, jacketMat);
   leftArm.position.set(-0.44, 1.42, 0);
@@ -483,7 +593,7 @@ function buildPlayerAvatar(
   handR.position.set(0, -0.53, 0);
   rightArm.add(handR);
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.78, 0.42), jacketMat);
+  const torso = new THREE.Mesh(new RoundedBoxGeometry(0.68, 0.78, 0.42, 3, 0.09), jacketMat);
   torso.position.set(0, 1.12, 0);
   torso.castShadow = true;
 
@@ -503,7 +613,7 @@ function buildPlayerAvatar(
   const varsityStripe = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.76, 0.44), shoeMat);
   varsityStripe.position.set(0, 1.12, 0);
 
-  const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.56, 0.24), bagMat);
+  const backpack = new THREE.Mesh(new RoundedBoxGeometry(0.5, 0.56, 0.24, 2, 0.055), bagMat);
   backpack.position.set(0, 1.14, -0.31);
   backpack.castShadow = true;
 
@@ -527,6 +637,35 @@ function buildPlayerAvatar(
   glasses.position.set(0, 1.84, 0.29);
 
   boyGroup.add(scarfCollar, varsityStripe, backpack, boyHairCrown, boyBangs, capCrown, capBrim, glasses);
+
+  const boyScholarGroup = new THREE.Group();
+  const scholarTie = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.34, 0.05), trimMat);
+  scholarTie.position.set(0, 1.29, 0.24);
+  scholarTie.rotation.z = Math.PI / 4;
+  const scholarBadge = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), trimMat);
+  scholarBadge.position.set(-0.22, 1.26, 0.24);
+  boyScholarGroup.add(scholarTie, scholarBadge);
+
+  const boySportyGroup = new THREE.Group();
+  const sportyHeadband = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.035, 7, 22), trimMat);
+  sportyHeadband.position.set(0, 1.91, 0);
+  sportyHeadband.rotation.x = Math.PI / 2;
+  const sportyWhistle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.11, 10), shoeMat);
+  sportyWhistle.position.set(0.06, 1.45, 0.25);
+  sportyWhistle.rotation.z = Math.PI / 2;
+  boySportyGroup.add(sportyHeadband, sportyWhistle);
+
+  const boyRockerGroup = new THREE.Group();
+  for (let i = 0; i < 5; i += 1) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.26, 6), boyHairMat);
+    spike.position.set((i - 2) * 0.1, 2.12 + (i % 2) * 0.05, -0.02);
+    spike.rotation.z = (i - 2) * -0.16;
+    boyRockerGroup.add(spike);
+  }
+  const rockerChain = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.018, 6, 18, Math.PI), trimMat);
+  rockerChain.position.set(0, 1.43, 0.23);
+  rockerChain.rotation.z = Math.PI;
+  boyRockerGroup.add(rockerChain);
 
   // =============================================
   // CEWE LUCU IMUT CANTIK (Cute Girl Visual Group)
@@ -594,10 +733,11 @@ function buildPlayerAvatar(
   const girlBangs = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.1, 0.16), girlHairMat);
   girlBangs.position.set(0, 1.98, 0.23);
 
-  const backHair = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.66, 0.22), girlHairMat);
+  const backHair = new THREE.Mesh(new RoundedBoxGeometry(0.56, 0.66, 0.22, 2, 0.075), girlHairMat);
   backHair.position.set(0, 1.56, -0.22);
   backHair.castShadow = true;
 
+  const girlTwinTailParts: THREE.Object3D[] = [];
   [-0.29, 0.29].forEach((sx, idx) => {
     const sideLock = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.048, 0.44, 8), girlHairMat);
     sideLock.position.set(sx, 1.66, 0.1);
@@ -613,6 +753,7 @@ function buildPlayerAvatar(
     const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.08), ribbonMat);
     ribbon.position.set(sx * 1.08, 2.13, 0.02);
     ribbon.rotation.z = idx === 0 ? 0.25 : -0.25;
+    girlTwinTailParts.push(bun, hairTie, twinTail, ribbon);
     // Back bow wings & hanging tails so ribbons shine from the rear camera view
     const backBowL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.06), ribbonMat);
     backBowL.position.set(sx * 1.08 - 0.07, 2.05, -0.23);
@@ -623,6 +764,7 @@ function buildPlayerAvatar(
     const backTail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.04), ribbonMat);
     backTail.position.set(sx * 1.12, 1.92, -0.24);
     backTail.rotation.z = idx === 0 ? 0.2 : -0.2;
+    girlTwinTailParts.push(backBowL, backBowR, backTail);
     girlGroup.add(sideLock, bun, hairTie, twinTail, ribbon, backBowL, backBowR, backTail);
   });
 
@@ -645,6 +787,48 @@ function buildPlayerAvatar(
     starPin,
   );
 
+  const girlIdolGroup = new THREE.Group();
+  [-1, 1].forEach((side) => {
+    const longLock = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.055, 0.8, 9), girlHairMat);
+    longLock.position.set(side * 0.3, 1.45, -0.03);
+    longLock.rotation.z = side * -0.08;
+    const starClip = new THREE.Mesh(new THREE.OctahedronGeometry(0.085, 0), trimMat);
+    starClip.position.set(side * 0.23, 2.04, 0.26);
+    starClip.scale.z = 0.35;
+    girlIdolGroup.add(longLock, starClip);
+  });
+
+  const girlSportyGroup = new THREE.Group();
+  const ponytail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.62, 10), girlHairMat);
+  ponytail.position.set(0, 1.72, -0.35);
+  ponytail.rotation.x = -0.35;
+  const sportyHairBand = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.035, 7, 22), ribbonMat);
+  sportyHairBand.position.set(0, 1.94, 0);
+  sportyHairBand.rotation.x = Math.PI / 2;
+  const shortsL = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.28, 0.3), skirtMat);
+  shortsL.position.set(-0.16, 0.72, 0);
+  const shortsR = shortsL.clone();
+  shortsR.position.x = 0.16;
+  girlSportyGroup.add(ponytail, sportyHairBand, shortsL, shortsR);
+
+  const girlElegantGroup = new THREE.Group();
+  const bobLeft = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), girlHairMat);
+  bobLeft.scale.set(0.8, 1.5, 0.85);
+  bobLeft.position.set(-0.27, 1.65, -0.02);
+  const bobRight = bobLeft.clone();
+  bobRight.position.x = 0.27;
+  const beret = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.34, 0.09, 18), ribbonMat);
+  beret.position.set(-0.06, 2.08, -0.02);
+  beret.rotation.z = -0.16;
+  const beretStem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 8), trimMat);
+  beretStem.position.set(-0.06, 2.16, -0.02);
+  const pearlNecklace = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 6, 18, Math.PI), laceMat);
+  pearlNecklace.position.set(0, 1.49, 0.19);
+  pearlNecklace.rotation.z = Math.PI;
+  const handbag = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.12), ribbonMat);
+  handbag.position.set(0.39, 0.98, 0.02);
+  girlElegantGroup.add(bobLeft, bobRight, beret, beretStem, pearlNecklace, handbag);
+
   // =============================================
   // RIDEABLE SKUTER LISTRIK KAMPUS (Electric Scooter)
   // =============================================
@@ -665,7 +849,7 @@ function buildPlayerAvatar(
   });
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.4 });
 
-  const scooterDeck = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 1.24), deckMat);
+  const scooterDeck = new THREE.Mesh(new RoundedBoxGeometry(0.46, 0.08, 1.24, 2, 0.035), deckMat);
   scooterDeck.position.set(0, 0.16, 0.04);
   const deckNeon = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.035, 1.12), neonMat);
   deckNeon.position.set(0, 0.135, 0.04);
@@ -749,28 +933,92 @@ function buildPlayerAvatar(
     torso,
     head,
     boyGroup,
+    boyScholarGroup,
+    boySportyGroup,
+    boyRockerGroup,
     girlGroup,
+    girlIdolGroup,
+    girlSportyGroup,
+    girlElegantGroup,
     gradCapGroup,
     gradStole,
   );
   root.add(scooterGroup);
 
-  let currentGender: AvatarGender = initialGender;
-  const setGender = (g: AvatarGender, gradActive = false) => {
-    currentGender = g;
-    const isGirl = g === "girl";
+  let currentAppearance = sanitizeAvatarAppearance(
+    initialAppearance,
+    getAvatarStyle(initialAppearance?.styleId).gender,
+  );
+  let currentGender = getAvatarStyle(currentAppearance.styleId).gender;
+  const setAppearance = (appearance: AvatarAppearance, gradActive = false) => {
+    currentAppearance = sanitizeAvatarAppearance(appearance);
+    const style = getAvatarStyle(currentAppearance.styleId);
+    currentGender = style.gender;
+    const isGirl = currentGender === "girl";
+    const styleId = style.id;
+
+    skinMat.color.set(currentAppearance.skinTone);
+    boyHairMat.color.set(currentAppearance.hairColor);
+    girlHairMat.color.set(currentAppearance.hairColor);
+    jacketMat.roughness = styleId === "boy_rocker" ? 0.38 : 0.68;
+    jacketMat.metalness = styleId === "boy_rocker" ? 0.24 : 0.06;
+
     boyGroup.visible = !isGirl;
     girlGroup.visible = isGirl;
-    sockL.visible = isGirl;
-    mjL.visible = isGirl;
-    sockR.visible = isGirl;
-    mjR.visible = isGirl;
-    leftShoe.visible = !isGirl;
-    rightShoe.visible = !isGirl;
-    capCrown.visible = !isGirl && !gradActive;
-    capBrim.visible = !isGirl && !gradActive;
+    boyScholarGroup.visible = !isGirl && styleId === "boy_scholar";
+    boySportyGroup.visible = !isGirl && styleId === "boy_sporty";
+    boyRockerGroup.visible = !isGirl && styleId === "boy_rocker";
+    girlIdolGroup.visible = isGirl && styleId === "girl_idol";
+    girlSportyGroup.visible = isGirl && styleId === "girl_sporty";
+    girlElegantGroup.visible = isGirl && styleId === "girl_elegant";
+
+    capCrown.visible = !isGirl && styleId === "boy_street" && !gradActive;
+    capBrim.visible = !isGirl && styleId === "boy_street" && !gradActive;
+    glasses.visible = !isGirl && (styleId === "boy_street" || styleId === "boy_scholar");
+    backpack.visible = !isGirl && (styleId === "boy_street" || styleId === "boy_sporty");
+    varsityStripe.visible = !isGirl && (styleId === "boy_street" || styleId === "boy_sporty");
+
+    girlTwinTailParts.forEach((part) => {
+      part.visible = isGirl && styleId === "girl_sakura";
+    });
+    pleatedSkirt.visible = isGirl && styleId !== "girl_sporty";
+    skirtTrim.visible = isGirl && styleId !== "girl_sporty";
+    cuteBag.visible = isGirl && (styleId === "girl_sakura" || styleId === "girl_idol");
+    bagHeart.visible = cuteBag.visible;
+    bowCenter.visible = isGirl && (styleId === "girl_sakura" || styleId === "girl_idol");
+    bowWingL.visible = bowCenter.visible;
+    bowWingR.visible = bowCenter.visible;
+    starPin.visible = isGirl && (styleId === "girl_sakura" || styleId === "girl_idol");
+    backHair.visible = isGirl && (styleId === "girl_sakura" || styleId === "girl_idol");
+
+    const sportyGirl = isGirl && styleId === "girl_sporty";
+    sockL.visible = isGirl && !sportyGirl;
+    mjL.visible = isGirl && !sportyGirl;
+    sockR.visible = isGirl && !sportyGirl;
+    mjR.visible = isGirl && !sportyGirl;
+    leftShoe.visible = !isGirl || sportyGirl;
+    rightShoe.visible = !isGirl || sportyGirl;
+
+    ribbonMat.color.set(
+      styleId === "girl_sporty"
+        ? "#06b6d4"
+        : styleId === "girl_elegant"
+          ? "#a855f7"
+          : styleId === "girl_idol"
+            ? "#f43f5e"
+            : "#f472b6",
+    );
   };
-  setGender(initialGender, false);
+  const setGender = (g: AvatarGender, gradActive = false) => {
+    setAppearance(
+      sanitizeAvatarAppearance(
+        { hairColor: currentAppearance.hairColor, skinTone: currentAppearance.skinTone },
+        g,
+      ),
+      gradActive,
+    );
+  };
+  setAppearance(currentAppearance, false);
 
   const setScooter = (active: boolean) => {
     scooterGroup.visible = active;
@@ -792,10 +1040,15 @@ function buildPlayerAvatar(
     scooterGroup,
     frontWheel,
     rearWheel,
+    setAppearance,
     setGender,
     setScooter,
     getGender: () => currentGender,
   };
+}
+
+function resolveRemoteAppearance(snap: RemotePlayerSnapshot): AvatarAppearance {
+  return sanitizeAvatarAppearance(snap.appearance, snap.gender === "girl" ? "girl" : "boy");
 }
 
 function buildTeacherNpc(accentHex: string): {
@@ -1753,7 +2006,7 @@ function buildCampusBuilding(
 
 function buildLotusPondAndBridge(stoneMat: THREE.MeshStandardMaterial, timberMat: THREE.MeshStandardMaterial): {
   group: THREE.Group;
-  waterUniforms: { time: { value: number } };
+  waterUniforms: { time: { value: number }; nightMix: { value: number } };
 } {
   const group = new THREE.Group();
 
@@ -1775,7 +2028,7 @@ function buildLotusPondAndBridge(stoneMat: THREE.MeshStandardMaterial, timberMat
   group.add(bed);
 
   // Animated GLSL Water surface
-  const waterUniforms = { time: { value: 0 } };
+  const waterUniforms = { time: { value: 0 }, nightMix: { value: 0 } };
   const waterMat = new THREE.ShaderMaterial({
     uniforms: waterUniforms,
     transparent: true,
@@ -1789,16 +2042,21 @@ function buildLotusPondAndBridge(stoneMat: THREE.MeshStandardMaterial, timberMat
     fragmentShader: `
       varying vec2 vUv;
       uniform float time;
+      uniform float nightMix;
       void main() {
         vec2 p = vUv - 0.5;
         float dist = length(p);
         float ripple = sin(dist * 34.0 - time * 2.4) * 0.5 + 0.5;
         float shimmer = sin(p.x * 22.0 + time * 1.5) * cos(p.y * 20.0 - time * 1.2) * 0.5 + 0.5;
-        vec3 deepJade = vec3(0.07, 0.34, 0.42);
-        vec3 surfaceAqua = vec3(0.22, 0.65, 0.72);
+        vec3 deepJade = mix(vec3(0.035, 0.24, 0.31), vec3(0.02, 0.09, 0.16), nightMix);
+        vec3 surfaceAqua = mix(vec3(0.16, 0.52, 0.58), vec3(0.08, 0.26, 0.38), nightMix);
         vec3 col = mix(deepJade, surfaceAqua, ripple * 0.32 + shimmer * 0.24);
+        float glint = pow(max(0.0, sin(p.x * 31.0 + time) * cos(p.y * 27.0 - time * 0.8)), 18.0);
+        col += vec3(0.48, 0.78, 0.82) * glint * (1.0 - nightMix * 0.65);
         float edgeFade = smoothstep(0.5, 0.44, dist);
         gl_FragColor = vec4(col, 0.86 * edgeFade);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }
     `,
   });
@@ -1905,6 +2163,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
   collectedOrbIds = [],
   localJacketHex = "#1d4ed8",
   localGender = "boy",
+  localAppearance,
   onScooter = false,
   remotePlayersRef,
   ballStateRef,
@@ -1942,6 +2201,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     collectedOrbIds,
     localJacketHex,
     localGender,
+    localAppearance,
     onScooter,
     remotePlayersRef,
     ballStateRef,
@@ -1977,6 +2237,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     collectedOrbIds,
     localJacketHex,
     localGender,
+    localAppearance,
     onScooter,
     remotePlayersRef,
     ballStateRef,
@@ -2041,7 +2302,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     })();
 
     const scene = new THREE.Scene();
-    const initialBg = propsRef.current.theme === "dark" ? 0x0e172a : 0xd5e9fa;
+    const initialBg = propsRef.current.theme === "dark" ? 0x1b2b48 : 0xe6f2fc;
     scene.background = new THREE.Color(initialBg);
     scene.fog = new THREE.FogExp2(initialBg, 0.0042);
 
@@ -2056,17 +2317,24 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     );
     camera.position.set(0, 12, 29);
 
+    const compactDevice = Math.min(width, height) < 650;
+    const maxPixelRatio = isSoftwareGl ? 1 : compactDevice ? 1.5 : 2;
+    const minPixelRatio = isSoftwareGl ? 1 : compactDevice ? 1 : 0.85;
+    let currentPixelRatio = Math.max(
+      minPixelRatio,
+      Math.min(maxPixelRatio, window.devicePixelRatio || 1),
+    );
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
       powerPreference: "high-performance",
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(width, height);
+    renderer.toneMappingExposure = 1.12;
+    renderer.setPixelRatio(currentPixelRatio);
+    renderer.setSize(width, height, false);
     renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     renderer.domElement.style.display = "block";
     renderer.domElement.style.width = "100%";
@@ -2076,10 +2344,36 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     renderer.domElement.setAttribute("data-testid", "campus-canvas");
     container.appendChild(renderer.domElement);
 
+    const usePostProcessing = !isSoftwareGl && !compactDevice;
+    const composer = usePostProcessing
+      ? new EffectComposer(
+          renderer,
+          new THREE.WebGLRenderTarget(width, height, {
+            type: THREE.HalfFloatType,
+            samples: Math.min(4, renderer.capabilities.maxSamples),
+          }),
+        )
+      : null;
+    const bloomPass = composer ? new UnrealBloomPass(new THREE.Vector2(width, height), 0.1, 0.2, 1.15) : null;
+    if (composer && bloomPass) {
+      composer.addPass(new RenderPass(scene, camera));
+      composer.addPass(bloomPass);
+      composer.addPass(new OutputPass());
+    }
+    const renderFrame = () => {
+      if (contextLost) return;
+      if (composer) composer.render();
+      else renderer.render(scene, camera);
+    };
+
     const pmrem = new THREE.PMREMGenerator(renderer);
     const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTexture;
+    scene.environmentIntensity = 0.62;
     pmrem.dispose();
+    container.setAttribute("data-graphics-quality", isSoftwareGl ? "compatibility" : usePostProcessing ? "cinematic" : "balanced");
+    container.setAttribute("data-post-processing", String(usePostProcessing));
+    container.setAttribute("data-pixel-ratio", currentPixelRatio.toFixed(2));
 
     // Dynamic Gradient Sky Dome + Night Starfield + Moon
     const skyUniforms = {
@@ -2116,11 +2410,32 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
             float sunAmt = max(dot(normalize(vWorldDir), sunDir), 0.0);
             sky += sunGlowColor * pow(sunAmt, 14.0) * sunStrength;
             gl_FragColor = vec4(sky, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
           }
         `,
       }),
     );
     scene.add(skyDome);
+
+    const cloudTex = createCloudTexture();
+    const cloudMat = new THREE.SpriteMaterial({
+      map: cloudTex,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.48,
+      fog: true,
+    });
+    const clouds = Array.from({ length: isSoftwareGl ? 7 : 12 }, (_, i) => {
+      const angle = (i / 12) * Math.PI * 2 + 0.35;
+      const radius = 150 + (i % 4) * 16;
+      const size = 24 + (i % 5) * 5;
+      const sprite = new THREE.Sprite(cloudMat);
+      sprite.position.set(Math.cos(angle) * radius, 44 + (i % 4) * 9, Math.sin(angle) * radius);
+      sprite.scale.set(size, size * 0.46, 1);
+      scene.add(sprite);
+      return { sprite, speed: 0.32 + (i % 3) * 0.12 };
+    });
 
     // Subtle Starfield + Moon (revealed in Dark Mode)
     const starPositions = new Float32Array(260 * 3);
@@ -2152,15 +2467,18 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     const keyLight = new THREE.DirectionalLight(0xfff3db, 2.05);
     keyLight.position.set(42, 68, 38);
     keyLight.castShadow = !isSoftwareGl;
-    keyLight.shadow.mapSize.set(1024, 1024);
+    const shadowMapSize = compactDevice ? 1024 : 2048;
+    keyLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     keyLight.shadow.camera.near = 5;
-    keyLight.shadow.camera.far = 190;
-    keyLight.shadow.camera.left = -82;
-    keyLight.shadow.camera.right = 82;
-    keyLight.shadow.camera.top = 82;
-    keyLight.shadow.camera.bottom = -82;
-    keyLight.shadow.bias = -0.0005;
-    scene.add(keyLight);
+    keyLight.shadow.camera.far = 170;
+    keyLight.shadow.camera.left = -42;
+    keyLight.shadow.camera.right = 42;
+    keyLight.shadow.camera.top = 42;
+    keyLight.shadow.camera.bottom = -42;
+    keyLight.shadow.bias = -0.00018;
+    keyLight.shadow.normalBias = 0.035;
+    keyLight.shadow.radius = 2;
+    scene.add(keyLight, keyLight.target);
 
     const rimLight = new THREE.DirectionalLight(0xc7d2fe, 0.45);
     rimLight.position.set(-34, 24, -46);
@@ -2220,11 +2538,31 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       scene.add(road);
     });
 
-    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6d3cd, roughness: 0.88, metalness: 0.03 });
-    const wallTex = createWallPlasterTexture();
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: wallTex, roughness: 0.78, metalness: 0.03 });
-    const timberMat = new THREE.MeshStandardMaterial({ color: 0x6b3f24, roughness: 0.72, metalness: 0.05 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6d3cd, roughness: 0.8, metalness: 0.04 });
+    const { map: wallTex, bumpMap: wallBump } = createWallPlasterTextures();
+    wallTex.anisotropy = maxAniso;
+    wallBump.anisotropy = maxAniso;
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: wallTex,
+      bumpMap: wallBump,
+      bumpScale: 0.035,
+      roughness: 0.76,
+      metalness: 0.03,
+    });
+    const { map: timberTex, bumpMap: timberBump } = createTimberTextures();
+    timberTex.anisotropy = maxAniso;
+    timberBump.anisotropy = maxAniso;
+    const timberMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: timberTex,
+      bumpMap: timberBump,
+      bumpScale: 0.045,
+      roughness: 0.68,
+      metalness: 0.05,
+    });
     const roofBump = createRoofTileBumpTexture();
+    roofBump.anisotropy = Math.min(8, maxAniso);
     const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.25, metalness: 0.75 });
     const gatePlaqueTex = createGatePlaqueTexture();
 
@@ -2515,7 +2853,10 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
 
     // 5 Autonomous Roaming Campus NPCs (Cowo & Cewe lively citizens!)
     const roamingNpcs = ROAMING_CITIZEN_NPCS.map((def) => {
-      const av = buildPlayerAvatar(def.colorHex, def.gender);
+      const av = buildPlayerAvatar(
+        def.colorHex,
+        sanitizeAvatarAppearance(undefined, def.gender),
+      );
       const startPt = def.waypoints[0];
       av.root.position.set(startPt[0], 0, startPt[1]);
 
@@ -3098,8 +3439,10 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     // Player Avatar (Local)
     let lastAppliedJacket = propsRef.current.localJacketHex || "#1d4ed8";
     let lastAppliedGender: AvatarGender = propsRef.current.localGender === "girl" ? "girl" : "boy";
+    let lastAppliedAppearance = sanitizeAvatarAppearance(propsRef.current.localAppearance, lastAppliedGender);
+    let lastAppliedAppearanceKey = JSON.stringify(lastAppliedAppearance);
     let lastAppliedScooter = Boolean(propsRef.current.onScooter);
-    const player = buildPlayerAvatar(lastAppliedJacket, lastAppliedGender);
+    const player = buildPlayerAvatar(lastAppliedJacket, lastAppliedAppearance);
     player.setScooter(lastAppliedScooter);
     // Offset spawn slightly when named multiplayer query params are used so peers don't spawn overlapped
     let spawnOffsetX = 0;
@@ -3126,6 +3469,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     player.root.rotation.y = playerYaw;
     scene.add(player.root);
     container.setAttribute("data-avatar-gender", lastAppliedGender);
+    container.setAttribute("data-avatar-style", lastAppliedAppearance.styleId);
     container.setAttribute("data-on-scooter", String(lastAppliedScooter));
 
     const playerShadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), contactShadowMat);
@@ -3150,6 +3494,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       renderedName: string;
       renderedColor: string;
       renderedGender: AvatarGender;
+      renderedAppearanceKey: string;
       renderedXp: number;
       renderedChatAt: number;
     }
@@ -3192,7 +3537,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     const _flyPos = new THREE.Vector3();
 
     const applyThemeColors = (currentTheme: "light" | "dark") => {
-      const targetBg = currentTheme === "dark" ? 0x0e172a : 0xd5e9fa;
+      const targetBg = currentTheme === "dark" ? 0x1b2b48 : 0xe6f2fc;
       (scene.background as THREE.Color).setHex(targetBg);
       if (scene.fog instanceof THREE.FogExp2) {
         scene.fog.color.setHex(targetBg);
@@ -3212,6 +3557,10 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
         bulbMat.emissiveIntensity = 1.55;
         particleMat.color.setHex(0xfbbf24);
         landmarks.forEach((l) => l.windowMats.forEach((m) => (m.emissiveIntensity = 0.65)));
+        renderer.toneMappingExposure = 0.98;
+        scene.environmentIntensity = 0.34;
+        cloudMat.opacity = 0.09;
+        waterUniforms.nightMix.value = 1;
       } else {
         skyUniforms.topColor.value.setHex(0x5fa8e8);
         skyUniforms.bottomColor.value.setHex(0xe6f2fc);
@@ -3227,6 +3576,10 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
         bulbMat.emissiveIntensity = 0.45;
         particleMat.color.setHex(0xf9a8d4);
         landmarks.forEach((l) => l.windowMats.forEach((m) => (m.emissiveIntensity = 0.18)));
+        renderer.toneMappingExposure = 1.12;
+        scene.environmentIntensity = 0.62;
+        cloudMat.opacity = 0.48;
+        waterUniforms.nightMix.value = 0;
       }
     };
     let lastAppliedTheme = propsRef.current.theme;
@@ -3236,6 +3589,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       if (propsRef.current.controlsDisabled || propsRef.current.gameState !== "playing") return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((tag === "BUTTON" || tag === "A") && (e.code === "Space" || e.code === "Enter")) return;
       keysPressed.add(e.code);
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -3375,10 +3729,9 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       camera.fov = computeResponsiveFov(aspect);
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-      if (!contextLost) {
-        renderer.render(scene, camera);
-      }
+      renderer.setSize(w, h, false);
+      composer?.setSize(w, h);
+      renderFrame();
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -3414,6 +3767,8 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     let disposed = false;
     let lastTime = performance.now();
     let totalElapsed = 0;
+    let qualityElapsedMs = 0;
+    let qualityFrames = 0;
 
     function afterDraw(cb: () => void) {
       const gl = renderer.getContext() as WebGL2RenderingContext;
@@ -3438,6 +3793,15 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       };
       frameId = window.setTimeout(poll, 5);
     }
+
+    const scheduleTick = () => {
+      if (disposed) return;
+      if (isSoftwareGl) {
+        afterDraw(tick);
+      } else {
+        frameId = requestAnimationFrame(tick);
+      }
+    };
 
     let lastNearbyId: string | null = null;
     let lastInsideId: string | null = null;
@@ -3465,10 +3829,44 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
     const tick = () => {
       if (disposed) return;
       const now = performance.now();
-      const dt = Math.min((now - lastTime) / 1000, isSoftwareGl ? 0.14 : 0.05);
+      const rawFrameMs = now - lastTime;
+      const inactiveScene =
+        propsRef.current.gameState === "paused" || propsRef.current.gameState === "gameover";
+      if (inactiveScene && rawFrameMs < 100) {
+        scheduleTick();
+        return;
+      }
+      const dt = Math.min(rawFrameMs / 1000, isSoftwareGl ? 0.14 : 0.05);
       lastTime = now;
       totalElapsed += dt;
       waterUniforms.time.value = totalElapsed;
+
+      if (!isSoftwareGl && !inactiveScene && totalElapsed > 3) {
+        qualityElapsedMs += Math.min(rawFrameMs, 100);
+        qualityFrames += 1;
+        if (qualityFrames >= 90) {
+          const nextPixelRatio = computeAdaptivePixelRatio(
+            currentPixelRatio,
+            qualityElapsedMs / qualityFrames,
+            minPixelRatio,
+            maxPixelRatio,
+          );
+          qualityElapsedMs = 0;
+          qualityFrames = 0;
+          if (Math.abs(nextPixelRatio - currentPixelRatio) > 0.01) {
+            currentPixelRatio = nextPixelRatio;
+            renderer.setPixelRatio(currentPixelRatio);
+            renderer.setSize(container.clientWidth || width, container.clientHeight || height, false);
+            composer?.setPixelRatio(currentPixelRatio);
+            container.setAttribute("data-pixel-ratio", currentPixelRatio.toFixed(2));
+          }
+        }
+      }
+
+      for (const cloud of clouds) {
+        cloud.sprite.position.x += cloud.speed * dt;
+        if (cloud.sprite.position.x > 220) cloud.sprite.position.x = -220;
+      }
 
       const {
         gameState: gs,
@@ -3841,8 +4239,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
           graduationStage.group.visible = true;
           confettiInst.visible = true;
           player.setScooter(false);
-          player.capCrown.visible = false;
-          player.capBrim.visible = false;
+          player.setAppearance(lastAppliedAppearance, true);
           player.gradCapGroup.visible = true;
           player.gradStole.visible = true;
 
@@ -3859,7 +4256,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
         } else {
           graduationStage.group.visible = false;
           confettiInst.visible = false;
-          player.setGender(lastAppliedGender, false);
+          player.setAppearance(lastAppliedAppearance, false);
           player.setScooter(lastAppliedScooter);
           player.gradCapGroup.visible = false;
           player.gradStole.visible = false;
@@ -4318,10 +4715,15 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
         player.jacketMat.color.set(targetJacket);
       }
       const targetGender: AvatarGender = propsRef.current.localGender === "girl" ? "girl" : "boy";
-      if (targetGender !== lastAppliedGender) {
+      const targetAppearance = sanitizeAvatarAppearance(propsRef.current.localAppearance, targetGender);
+      const targetAppearanceKey = JSON.stringify(targetAppearance);
+      if (targetAppearanceKey !== lastAppliedAppearanceKey || targetGender !== lastAppliedGender) {
         lastAppliedGender = targetGender;
-        player.setGender(targetGender, gradMode);
+        lastAppliedAppearance = targetAppearance;
+        lastAppliedAppearanceKey = targetAppearanceKey;
+        player.setAppearance(targetAppearance, gradMode);
         container.setAttribute("data-avatar-gender", targetGender);
+        container.setAttribute("data-avatar-style", targetAppearance.styleId);
       }
       const targetScooter = Boolean(propsRef.current.onScooter) && !gradMode;
       if (targetScooter !== lastAppliedScooter) {
@@ -4368,7 +4770,8 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
           let rv = remoteVisuals.get(rid);
           if (!rv) {
             const snapGender: AvatarGender = snap.gender === "girl" ? "girl" : "boy";
-            const av = buildPlayerAvatar(snap.colorHex, snapGender);
+            const snapAppearance = resolveRemoteAppearance(snap);
+            const av = buildPlayerAvatar(snap.colorHex, snapAppearance);
             const sh = new THREE.Mesh(new THREE.CircleGeometry(0.68, 16), contactShadowMat);
             sh.rotation.x = -Math.PI / 2;
 
@@ -4420,6 +4823,7 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
               renderedName: snap.name,
               renderedColor: snap.colorHex,
               renderedGender: snapGender,
+              renderedAppearanceKey: JSON.stringify(snapAppearance),
               renderedXp: snap.xp,
               renderedChatAt: 0,
             };
@@ -4427,9 +4831,12 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
           }
 
           const nextRemoteGender: AvatarGender = snap.gender === "girl" ? "girl" : "boy";
-          if (rv.renderedGender !== nextRemoteGender) {
+          const nextRemoteAppearance = resolveRemoteAppearance(snap);
+          const nextRemoteAppearanceKey = JSON.stringify(nextRemoteAppearance);
+          if (rv.renderedAppearanceKey !== nextRemoteAppearanceKey) {
             rv.renderedGender = nextRemoteGender;
-            rv.avatar.setGender(nextRemoteGender, false);
+            rv.renderedAppearanceKey = nextRemoteAppearanceKey;
+            rv.avatar.setAppearance(nextRemoteAppearance, false);
           }
           if (
             rv.renderedName !== snap.name ||
@@ -4531,15 +4938,14 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
         }
       }
 
-      if (!contextLost) {
-        renderer.render(scene, camera);
+      if (!isSoftwareGl) {
+        keyLight.target.position.set(playerPos.x, 0, playerPos.z);
+        keyLight.position.set(playerPos.x + 42, 68, playerPos.z + 38);
+        keyLight.target.updateMatrixWorld();
       }
+      renderFrame();
 
-      if (isSoftwareGl) {
-        afterDraw(tick);
-      } else {
-        frameId = requestAnimationFrame(tick);
-      }
+      scheduleTick();
     };
 
     tick();
@@ -4562,11 +4968,17 @@ export const CampusScene3D: React.FC<CampusScene3DProps> = ({
       canvas.removeEventListener("webglcontextlost", onContextLost);
       canvas.removeEventListener("webglcontextrestored", onContextRestored);
 
+      bloomPass?.dispose();
+      composer?.dispose();
       envTexture.dispose();
+      cloudTex.dispose();
       groundTex.dispose();
       paverMap.dispose();
       paverBump.dispose();
       wallTex.dispose();
+      wallBump.dispose();
+      timberTex.dispose();
+      timberBump.dispose();
       roofBump.dispose();
       gatePlaqueTex.dispose();
       graduationStage.bannerTex.dispose();

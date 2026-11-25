@@ -1,3 +1,4 @@
+import { MATERI } from "../data/materi";
 import type {
   ChapterData,
   ChapterStageId,
@@ -8,6 +9,11 @@ import type {
 
 export const STORAGE_KEY = "hanyu_kota_kampus_3d_v3";
 export const MAX_ENERGY = 5;
+export const PROGRESS_VERSION = 2;
+export const MAX_SAVE_CHARS = 250_000;
+export const MAX_DAILY_VOICE_REWARD_TURNS = 5;
+export const MAX_DAILY_DYNAMIC_REWARDS = 3;
+export const MAX_DAILY_TONE_REWARDS = 5;
 
 export interface ReviewItem {
   questionId: string;
@@ -36,9 +42,14 @@ export interface DailyStats {
   voiceTurns: number;
   flashcardsReviewed: number;
   hanziPracticed: number;
+  dynamicPracticeRewards: number;
+  toneRewards: number;
+  flashcardXpIds: string[];
+  hanziXpIds: string[];
 }
 
 export interface PlayerProgressState {
+  progressVersion: number;
   xp: number;
   energy: number;
   lastEnergyTick: number;
@@ -62,6 +73,7 @@ export interface PlayerProgressState {
   lastExamScore: number | null;
   bestExamScore?: number | null;
   collectedOrbIds: string[];
+  claimedWorldInteractionIds: string[];
   flashcardMastery: Record<string, number>; // vocabId -> box 0..3
   practicedHanzi: string[];
   toneDrillsSolved: number;
@@ -90,12 +102,17 @@ export function createEmptyDailyStats(date: string): DailyStats {
     voiceTurns: 0,
     flashcardsReviewed: 0,
     hanziPracticed: 0,
+    dynamicPracticeRewards: 0,
+    toneRewards: 0,
+    flashcardXpIds: [],
+    hanziXpIds: [],
   };
 }
 
 export function getDefaultProgressState(nowMs = Date.now()): PlayerProgressState {
   const today = new Date(nowMs).toISOString().slice(0, 10);
   return {
+    progressVersion: PROGRESS_VERSION,
     xp: 0,
     energy: MAX_ENERGY,
     lastEnergyTick: nowMs,
@@ -119,11 +136,58 @@ export function getDefaultProgressState(nowMs = Date.now()): PlayerProgressState
     lastExamScore: null,
     bestExamScore: null,
     collectedOrbIds: [],
+    claimedWorldInteractionIds: [],
     flashcardMastery: {},
     practicedHanzi: [],
     toneDrillsSolved: 0,
     dailyStats: createEmptyDailyStats(today),
     claimedDailyQuestIds: [],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function clampInt(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.floor(value)))
+    : fallback;
+}
+
+function sanitizeStringArray(value: unknown, maxItems: number, maxLength = 120): string[] {
+  if (!Array.isArray(value)) return [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value.slice(0, maxItems)) {
+    if (typeof item !== "string") continue;
+    const clean = item.trim().slice(0, maxLength);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    result.push(clean);
+  }
+  return result;
+}
+
+function sanitizeDailyStats(value: unknown, today: string): DailyStats {
+  const raw = isRecord(value) ? value : {};
+  const defaults = createEmptyDailyStats(today);
+  return {
+    date: today,
+    quizzesSolved: clampInt(raw.quizzesSolved, 0, 0, 100),
+    orbsCollected: clampInt(raw.orbsCollected, 0, 0, CAMPUS_ORBS.length),
+    voiceTurns: clampInt(raw.voiceTurns, 0, 0, MAX_DAILY_VOICE_REWARD_TURNS),
+    flashcardsReviewed: clampInt(raw.flashcardsReviewed, 0, 0, 500),
+    hanziPracticed: clampInt(raw.hanziPracticed, 0, 0, 500),
+    dynamicPracticeRewards: clampInt(
+      raw.dynamicPracticeRewards,
+      0,
+      0,
+      MAX_DAILY_DYNAMIC_REWARDS,
+    ),
+    toneRewards: clampInt(raw.toneRewards, 0, 0, MAX_DAILY_TONE_REWARDS),
+    flashcardXpIds: sanitizeStringArray(raw.flashcardXpIds, 500),
+    hanziXpIds: sanitizeStringArray(raw.hanziXpIds, 500, 16),
   };
 }
 
@@ -133,12 +197,13 @@ function resolveDailyState(
 ): { dailyStats: DailyStats; claimedDailyQuestIds: string[]; today: string } {
   const today = new Date(nowMs).toISOString().slice(0, 10);
   const sameDay = Boolean(state.dailyStats && state.dailyStats.date === today);
+  const validQuestIds = new Set(["dq_orbs", "dq_quiz", "dq_studio"]);
   return {
     today,
-    dailyStats: sameDay ? { ...state.dailyStats } : createEmptyDailyStats(today),
+    dailyStats: sameDay ? sanitizeDailyStats(state.dailyStats, today) : createEmptyDailyStats(today),
     claimedDailyQuestIds:
       sameDay && Array.isArray(state.claimedDailyQuestIds)
-        ? [...state.claimedDailyQuestIds]
+        ? sanitizeStringArray(state.claimedDailyQuestIds, 3).filter((id) => validQuestIds.has(id))
         : [],
   };
 }
@@ -152,26 +217,43 @@ export function syncEnergyAndStreak(
     0,
     Math.min(MAX_ENERGY, Number.isFinite(state.energy) ? Math.floor(state.energy) : MAX_ENERGY),
   );
-  const safeXp = Number.isFinite(state.xp) ? Math.max(0, state.xp) : 0;
+  const safeXp = clampInt(state.xp, 0, 0, 1_000_000);
   const safeSpeechRate =
     typeof state.speechRate === "number" && Number.isFinite(state.speechRate)
       ? Math.max(0.6, Math.min(1.3, state.speechRate))
       : 0.88;
 
+  const safeLastExamScore =
+    typeof state.lastExamScore === "number" && Number.isFinite(state.lastExamScore)
+      ? Math.max(0, Math.min(100, state.lastExamScore))
+      : null;
+  const safeBestExamScore =
+    typeof state.bestExamScore === "number" && Number.isFinite(state.bestExamScore)
+      ? Math.max(0, Math.min(100, state.bestExamScore))
+      : safeLastExamScore;
+
   const next: PlayerProgressState = {
     ...state,
+    progressVersion: PROGRESS_VERSION,
     xp: safeXp,
     energy: clampedEnergy,
     speechRate: safeSpeechRate,
-    bestExamScore:
-      state.bestExamScore ?? (state.lastExamScore !== null ? state.lastExamScore : null),
-    chapters: { ...state.chapters },
-    badges: [...state.badges],
-    reviewQueue: [...state.reviewQueue],
-    conceptMistakes: { ...state.conceptMistakes },
-    collectedOrbIds: Array.isArray(state.collectedOrbIds) ? [...state.collectedOrbIds] : [],
-    flashcardMastery: { ...(state.flashcardMastery ?? {}) },
-    practicedHanzi: Array.isArray(state.practicedHanzi) ? [...state.practicedHanzi] : [],
+    streak: clampInt(state.streak, 1, 1, 9999),
+    consecutiveCorrect: clampInt(state.consecutiveCorrect, 0, 0, 9999),
+    consecutiveWrong: clampInt(state.consecutiveWrong, 0, 0, 9999),
+    bestCombo: clampInt(state.bestCombo, 0, 0, 9999),
+    liveVoiceTurns: clampInt(state.liveVoiceTurns, 0, 0, 1_000_000),
+    toneDrillsSolved: clampInt(state.toneDrillsSolved, 0, 0, 1_000_000),
+    lastExamScore: safeLastExamScore,
+    bestExamScore: safeBestExamScore,
+    chapters: isRecord(state.chapters) ? { ...state.chapters } : {},
+    badges: sanitizeStringArray(state.badges, 64),
+    reviewQueue: Array.isArray(state.reviewQueue) ? [...state.reviewQueue] : [],
+    conceptMistakes: isRecord(state.conceptMistakes) ? { ...state.conceptMistakes } : {},
+    collectedOrbIds: sanitizeStringArray(state.collectedOrbIds, CAMPUS_ORBS.length),
+    claimedWorldInteractionIds: sanitizeStringArray(state.claimedWorldInteractionIds, 100),
+    flashcardMastery: isRecord(state.flashcardMastery) ? { ...state.flashcardMastery } : {},
+    practicedHanzi: sanitizeStringArray(state.practicedHanzi, 2000, 16),
     dailyStats,
     claimedDailyQuestIds,
   };
@@ -205,37 +287,191 @@ export function syncEnergyAndStreak(
   return next;
 }
 
+function sanitizeResultMap(value: unknown, validIds: string[]): Record<string, boolean> {
+  if (!isRecord(value)) return {};
+  const results: Record<string, boolean> = {};
+  for (const id of validIds) {
+    if (typeof value[id] === "boolean") results[id] = value[id];
+  }
+  return results;
+}
+
+function sanitizeChapterProgress(
+  value: unknown,
+  chapterId: string,
+  isCurrentVersion: boolean,
+): ChapterProgress {
+  const chapter = MATERI.chapters.find((ch) => ch.id === chapterId);
+  if (!chapter || !isRecord(value)) return createEmptyChapterProgress();
+  const quizIds = chapter.kuis.map((q) => q.id);
+  const practiceIds = chapter.latihan.map((task) => task.id);
+  const bossIds = chapter.boss.steps.map((step) => step.id);
+  const kuisResults = sanitizeResultMap(value.kuisResults, quizIds);
+  const bossResults = sanitizeResultMap(value.bossResults, bossIds);
+  const allBossStepsCorrect = bossIds.every((id) => bossResults[id] === true);
+  const cp: ChapterProgress = {
+    pembukaDone: value.pembukaDone === true,
+    penjelasanDone: value.penjelasanDone === true,
+    // Older saves could mark a wrong practice attempt complete; require replay to verify them.
+    latihanDoneIds:
+      isCurrentVersion
+        ? practiceIds.filter((id) => Array.isArray(value.latihanDoneIds) && value.latihanDoneIds.includes(id))
+        : [],
+    kuisResults,
+    bossStepDoneIds: bossIds.filter(
+      (id) => Array.isArray(value.bossStepDoneIds) && value.bossStepDoneIds.includes(id),
+    ),
+    bossResults,
+    bossCompleted: value.bossCompleted === true && allBossStepsCorrect,
+    stars: 0,
+  };
+  cp.stars = computeChapterStars(cp, chapter);
+  return cp;
+}
+
 export function loadProgressState(storage?: Pick<Storage, "getItem">): PlayerProgressState {
   try {
     const store = storage ?? (typeof window !== "undefined" ? window.localStorage : undefined);
     if (!store) return getDefaultProgressState();
     const raw = store.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultProgressState();
-    const parsed = JSON.parse(raw) as Partial<PlayerProgressState>;
-    const defaults = getDefaultProgressState();
-    const validChapterIds = new Set(["bab1", "bab2", "bab3", "bab4", "bab5", "bab6", "bab7"]);
+    if (!raw || typeof raw !== "string" || raw.length > MAX_SAVE_CHARS) {
+      return getDefaultProgressState();
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return getDefaultProgressState();
+    const nowMs = Date.now();
+    const defaults = getDefaultProgressState(nowMs);
+    const chapterIds = MATERI.chapters.map((ch) => ch.id);
+    const validChapterIds = new Set(chapterIds);
+    const vocabIds = new Set(MATERI.vocabBank.map((v) => v.id));
+    const orbIds = new Set(CAMPUS_ORBS.map((orb) => orb.id));
+    const questionIds = new Set(
+      MATERI.chapters.flatMap((ch) => [
+        ...ch.kuis.map((q) => q.id),
+        ...ch.latihan.map((task) => task.id),
+      ]),
+    );
+    const chapters: Record<string, ChapterProgress> = {};
+    const isCurrentVersion = parsed.progressVersion === PROGRESS_VERSION;
+    if (isRecord(parsed.chapters)) {
+      for (const chapterId of chapterIds) {
+        if (parsed.chapters[chapterId] !== undefined) {
+          chapters[chapterId] = sanitizeChapterProgress(
+            parsed.chapters[chapterId],
+            chapterId,
+            isCurrentVersion,
+          );
+        }
+      }
+    }
+
+    const reviewQueue: ReviewItem[] = [];
+    if (Array.isArray(parsed.reviewQueue)) {
+      for (const item of parsed.reviewQueue.slice(0, 200)) {
+        if (!isRecord(item) || typeof item.questionId !== "string" || !questionIds.has(item.questionId)) {
+          continue;
+        }
+        if (typeof item.chapterId !== "string" || !validChapterIds.has(item.chapterId)) continue;
+        reviewQueue.push({
+          questionId: item.questionId,
+          chapterId: item.chapterId,
+          conceptTag:
+            typeof item.conceptTag === "string" ? item.conceptTag.trim().slice(0, 120) : "",
+          topic: typeof item.topic === "string" ? item.topic.trim().slice(0, 200) : "",
+          wrongCount: clampInt(item.wrongCount, 1, 1, 10_000),
+          lastWrongAt: clampInt(item.lastWrongAt, nowMs, 0, nowMs),
+        });
+      }
+    }
+
+    const conceptMistakes: PlayerProgressState["conceptMistakes"] = {};
+    if (isRecord(parsed.conceptMistakes)) {
+      for (const [conceptTag, info] of Object.entries(parsed.conceptMistakes).slice(0, 200)) {
+        if (!conceptTag || conceptTag.length > 120 || !isRecord(info)) continue;
+        if (typeof info.chapterId !== "string" || !validChapterIds.has(info.chapterId)) continue;
+        conceptMistakes[conceptTag] = {
+          chapterId: info.chapterId,
+          topic: typeof info.topic === "string" ? info.topic.trim().slice(0, 200) : "",
+          count: clampInt(info.count, 1, 1, 100_000),
+        };
+      }
+    }
+
+    const flashcardMastery: Record<string, number> = {};
+    if (isRecord(parsed.flashcardMastery)) {
+      for (const [vocabId, box] of Object.entries(parsed.flashcardMastery).slice(0, 500)) {
+        if (vocabIds.has(vocabId)) flashcardMastery[vocabId] = clampInt(box, 0, 0, 3);
+      }
+    }
+
+    const validPlayDate =
+      typeof parsed.lastPlayDate === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(parsed.lastPlayDate) &&
+      Number.isFinite(Date.parse(parsed.lastPlayDate));
+    const sameSavedDay =
+      isRecord(parsed.dailyStats) && parsed.dailyStats.date === defaults.dailyStats.date;
     const merged: PlayerProgressState = {
       ...defaults,
-      ...parsed,
+      progressVersion: PROGRESS_VERSION,
+      xp: clampInt(parsed.xp, 0, 0, 1_000_000),
+      energy: clampInt(parsed.energy, MAX_ENERGY, 0, MAX_ENERGY),
+      lastEnergyTick: clampInt(parsed.lastEnergyTick, nowMs, 0, Number.MAX_SAFE_INTEGER),
+      streak: clampInt(parsed.streak, 1, 1, 9999),
+      lastPlayDate:
+        validPlayDate && typeof parsed.lastPlayDate === "string"
+          ? parsed.lastPlayDate
+          : defaults.lastPlayDate,
+      mode:
+        parsed.mode === "tantangan" || parsed.mode === "ujian" || parsed.mode === "belajar"
+          ? parsed.mode
+          : defaults.mode,
+      theme: parsed.theme === "dark" ? "dark" : "light",
+      muted: parsed.muted === true,
+      bgmEnabled: typeof parsed.bgmEnabled === "boolean" ? parsed.bgmEnabled : defaults.bgmEnabled,
+      naturalTtsEnabled:
+        typeof parsed.naturalTtsEnabled === "boolean"
+          ? parsed.naturalTtsEnabled
+          : defaults.naturalTtsEnabled,
+      speechRate:
+        typeof parsed.speechRate === "number" && Number.isFinite(parsed.speechRate)
+          ? Math.max(0.6, Math.min(1.3, parsed.speechRate))
+          : defaults.speechRate,
       activeChapterId:
         typeof parsed.activeChapterId === "string" && validChapterIds.has(parsed.activeChapterId)
           ? parsed.activeChapterId
           : defaults.activeChapterId,
-      chapters: parsed.chapters ?? {},
-      bgmEnabled:
-        typeof parsed.bgmEnabled === "boolean" ? parsed.bgmEnabled : defaults.bgmEnabled,
-      badges: Array.isArray(parsed.badges) ? parsed.badges : [],
-      reviewQueue: Array.isArray(parsed.reviewQueue) ? parsed.reviewQueue : [],
-      conceptMistakes: parsed.conceptMistakes ?? {},
-      collectedOrbIds: Array.isArray(parsed.collectedOrbIds) ? parsed.collectedOrbIds : [],
-      flashcardMastery: parsed.flashcardMastery ?? {},
-      practicedHanzi: Array.isArray(parsed.practicedHanzi) ? parsed.practicedHanzi : [],
-      dailyStats: parsed.dailyStats ?? defaults.dailyStats,
-      claimedDailyQuestIds: Array.isArray(parsed.claimedDailyQuestIds)
-        ? parsed.claimedDailyQuestIds
+      badges: sanitizeStringArray(parsed.badges, 64),
+      chapters,
+      reviewQueue,
+      conceptMistakes,
+      consecutiveCorrect: clampInt(parsed.consecutiveCorrect, 0, 0, 9999),
+      consecutiveWrong: clampInt(parsed.consecutiveWrong, 0, 0, 9999),
+      bestCombo: clampInt(parsed.bestCombo, 0, 0, 9999),
+      liveVoiceTurns: clampInt(parsed.liveVoiceTurns, 0, 0, 1_000_000),
+      lastExamScore:
+        typeof parsed.lastExamScore === "number" && Number.isFinite(parsed.lastExamScore)
+          ? Math.max(0, Math.min(100, parsed.lastExamScore))
+          : null,
+      bestExamScore:
+        typeof parsed.bestExamScore === "number" && Number.isFinite(parsed.bestExamScore)
+          ? Math.max(0, Math.min(100, parsed.bestExamScore))
+          : null,
+      collectedOrbIds: sanitizeStringArray(parsed.collectedOrbIds, CAMPUS_ORBS.length).filter((id) =>
+        orbIds.has(id),
+      ),
+      claimedWorldInteractionIds: sanitizeStringArray(parsed.claimedWorldInteractionIds, 100),
+      flashcardMastery,
+      practicedHanzi: sanitizeStringArray(parsed.practicedHanzi, 2000, 16),
+      toneDrillsSolved: clampInt(parsed.toneDrillsSolved, 0, 0, 1_000_000),
+      dailyStats:
+        sameSavedDay && isRecord(parsed.dailyStats)
+          ? sanitizeDailyStats(parsed.dailyStats, defaults.dailyStats.date)
+          : defaults.dailyStats,
+      claimedDailyQuestIds: sameSavedDay
+        ? sanitizeStringArray(parsed.claimedDailyQuestIds, 3)
         : [],
     };
-    return syncEnergyAndStreak(merged);
+    return syncEnergyAndStreak(merged, nowMs);
   } catch {
     return getDefaultProgressState();
   }
@@ -294,35 +530,34 @@ export function getChapterProgress(
   return state.chapters[chapterId] ?? createEmptyChapterProgress();
 }
 
+export function isQuizMastered(cp: ChapterProgress, chapter: ChapterData): boolean {
+  return chapter.kuis.every((question) => cp.kuisResults[question.id] === true);
+}
+
+export function getQuizCorrectCount(cp: ChapterProgress, chapter: ChapterData): number {
+  return chapter.kuis.filter((question) => cp.kuisResults[question.id] === true).length;
+}
+
+export function isPracticeComplete(cp: ChapterProgress, chapter: ChapterData): boolean {
+  return chapter.latihan.every((task) => cp.latihanDoneIds.includes(task.id));
+}
+
 export function isBossMastered(
   cp: ChapterProgress,
   chapter: ChapterData,
 ): boolean {
-  if (!cp.bossCompleted) return false;
-  const results = cp.bossResults ?? {};
-  // Backwards compatibility if bossStepDoneIds existed without bossResults
-  if (Object.keys(results).length === 0) {
-    return cp.bossStepDoneIds.length >= chapter.boss.steps.length;
-  }
-  return chapter.boss.steps.every((step) => results[step.id] === true);
+  if (!cp.bossCompleted || !isQuizMastered(cp, chapter)) return false;
+  return chapter.boss.steps.every((step) => cp.bossResults?.[step.id] === true);
 }
 
 export function computeChapterStars(
   cp: ChapterProgress,
   chapter: ChapterData,
 ): number {
-  const latihanComplete = cp.latihanDoneIds.length >= chapter.latihan.length;
-  const quizValues = Object.values(cp.kuisResults);
-  const quizDone = quizValues.length >= chapter.kuis.length;
-  const correctQuizCount = quizValues.filter(Boolean).length;
-
-  if (!isBossMastered(cp, chapter)) {
-    if (latihanComplete && quizDone) return 1;
-    return 0;
-  }
-  if (correctQuizCount >= chapter.kuis.length && latihanComplete) return 3;
-  if (correctQuizCount >= Math.ceil(chapter.kuis.length * 0.6)) return 2;
-  return 1;
+  if (isBossMastered(cp, chapter)) return 3;
+  if (isPracticeComplete(cp, chapter) && isQuizMastered(cp, chapter)) return 2;
+  if (isPracticeComplete(cp, chapter)) return 1;
+  return 0;
 }
 
 export function isStageUnlocked(
@@ -335,13 +570,12 @@ export function isStageUnlocked(
     return cp.pembukaDone || cp.penjelasanDone || cp.latihanDoneIds.length > 0;
   }
   if (stage === "latihan") {
-    return cp.penjelasanDone || cp.latihanDoneIds.length > 0 || Object.keys(cp.kuisResults).length > 0;
+    return cp.penjelasanDone || isPracticeComplete(cp, chapter);
   }
   if (stage === "kuis") {
-    return cp.latihanDoneIds.length >= chapter.latihan.length || Object.keys(cp.kuisResults).length > 0;
+    return isPracticeComplete(cp, chapter) || getQuizCorrectCount(cp, chapter) > 0;
   }
-  // boss
-  return Object.keys(cp.kuisResults).length >= chapter.kuis.length || cp.bossCompleted;
+  return isQuizMastered(cp, chapter);
 }
 
 export function getCompletedStagesCount(
@@ -351,8 +585,8 @@ export function getCompletedStagesCount(
   let count = 0;
   if (cp.pembukaDone) count += 1;
   if (cp.penjelasanDone) count += 1;
-  if (cp.latihanDoneIds.length >= chapter.latihan.length) count += 1;
-  if (Object.keys(cp.kuisResults).length >= chapter.kuis.length) count += 1;
+  if (isPracticeComplete(cp, chapter)) count += 1;
+  if (isQuizMastered(cp, chapter)) count += 1;
   if (isBossMastered(cp, chapter)) count += 1;
   return count;
 }
@@ -363,8 +597,8 @@ export function getRecommendedStage(
 ): ChapterStageId {
   if (!cp.pembukaDone) return "pembuka";
   if (!cp.penjelasanDone) return "penjelasan";
-  if (cp.latihanDoneIds.length < chapter.latihan.length) return "latihan";
-  if (Object.keys(cp.kuisResults).length < chapter.kuis.length) return "kuis";
+  if (!isPracticeComplete(cp, chapter)) return "latihan";
+  if (!isQuizMastered(cp, chapter)) return "kuis";
   return "boss";
 }
 
@@ -526,7 +760,7 @@ export function recordQuizOutcome(
     bestCombo: Math.max(state.bestCombo ?? 0, nextCombo),
     dailyStats: {
       ...dailyStats,
-      quizzesSolved: dailyStats.quizzesSolved + (params.isCorrect ? 1 : 0),
+      quizzesSolved: Math.min(100, dailyStats.quizzesSolved + (params.isCorrect ? 1 : 0)),
     },
     claimedDailyQuestIds,
     reviewQueue,
@@ -534,6 +768,100 @@ export function recordQuizOutcome(
   };
 
   return { nextState, xpGained };
+}
+
+interface ChapterQuestionOutcomeParams {
+  questionId: string;
+  chapterId: string;
+  conceptTag: string;
+  topic: string;
+  isCorrect: boolean;
+  hintLevel: number;
+  nowMs?: number;
+}
+
+export function recordPracticeOutcome(
+  state: PlayerProgressState,
+  params: ChapterQuestionOutcomeParams,
+): { nextState: PlayerProgressState; xpGained: number } {
+  const chapter = MATERI.chapters.find((ch) => ch.id === params.chapterId);
+  const task = chapter?.latihan.find((item) => item.id === params.questionId);
+  if (!chapter || !task) return { nextState: state, xpGained: 0 };
+  const cp = getChapterProgress(state, chapter.id);
+  const alreadyDone = cp.latihanDoneIds.includes(task.id);
+  const inReviewQueue = state.reviewQueue.some((item) => item.questionId === task.id);
+  if (alreadyDone && !inReviewQueue && params.isCorrect) {
+    return { nextState: state, xpGained: 0 };
+  }
+  const { nextState, xpGained } = recordQuizOutcome(state, params);
+  const nextCp = getChapterProgress(nextState, chapter.id);
+  const updated: ChapterProgress = {
+    ...nextCp,
+    latihanDoneIds:
+      params.isCorrect && !alreadyDone
+        ? [...nextCp.latihanDoneIds, task.id]
+        : nextCp.latihanDoneIds,
+  };
+  updated.stars = computeChapterStars(updated, chapter);
+  return {
+    xpGained,
+    nextState: {
+      ...nextState,
+      chapters: { ...nextState.chapters, [chapter.id]: updated },
+    },
+  };
+}
+
+export function recordChapterQuizOutcome(
+  state: PlayerProgressState,
+  params: ChapterQuestionOutcomeParams,
+): { nextState: PlayerProgressState; xpGained: number } {
+  const chapter = MATERI.chapters.find((ch) => ch.id === params.chapterId);
+  const question = chapter?.kuis.find((item) => item.id === params.questionId);
+  if (!chapter || !question) return { nextState: state, xpGained: 0 };
+  const cp = getChapterProgress(state, chapter.id);
+  if (cp.kuisResults[question.id] === true) return { nextState: state, xpGained: 0 };
+  const { nextState, xpGained } = recordQuizOutcome(state, params);
+  const nextCp = getChapterProgress(nextState, chapter.id);
+  const updated: ChapterProgress = {
+    ...nextCp,
+    kuisResults: { ...nextCp.kuisResults, [question.id]: params.isCorrect },
+  };
+  updated.stars = computeChapterStars(updated, chapter);
+  return {
+    xpGained,
+    nextState: {
+      ...nextState,
+      chapters: { ...nextState.chapters, [chapter.id]: updated },
+    },
+  };
+}
+
+export function recordDynamicPracticeXp(
+  state: PlayerProgressState,
+  amount = 15,
+  nowMs = Date.now(),
+): { nextState: PlayerProgressState; xpGained: number; capReached: boolean } {
+  const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
+  const capReached = dailyStats.dynamicPracticeRewards >= MAX_DAILY_DYNAMIC_REWARDS;
+  const safeAmount = clampInt(amount, 0, 0, 25);
+  const xpGained = capReached ? 0 : safeAmount;
+  return {
+    xpGained,
+    capReached,
+    nextState: {
+      ...state,
+      xp: state.xp + xpGained,
+      dailyStats: {
+        ...dailyStats,
+        dynamicPracticeRewards: Math.min(
+          MAX_DAILY_DYNAMIC_REWARDS,
+          dailyStats.dynamicPracticeRewards + (xpGained > 0 ? 1 : 0),
+        ),
+      },
+      claimedDailyQuestIds,
+    },
+  };
 }
 
 export function getDueReviewItemsForChapter(
@@ -1277,16 +1605,60 @@ export function recordOrbCollected(
   };
 }
 
+export function recordWorldInteractionReward(
+  state: PlayerProgressState,
+  itemId: string,
+  xpReward: number,
+  energyReward = 0,
+  nowMs = Date.now(),
+): { nextState: PlayerProgressState; xpGained: number; energyGained: number; newlyClaimed: boolean } {
+  const cleanId = typeof itemId === "string" ? itemId.trim().slice(0, 120) : "";
+  const newlyClaimed = Boolean(cleanId) && !state.claimedWorldInteractionIds.includes(cleanId);
+  if (!newlyClaimed) {
+    return { nextState: state, xpGained: 0, energyGained: 0, newlyClaimed: false };
+  }
+  const safeXp = clampInt(xpReward, 0, 0, 100);
+  const safeEnergy = clampInt(energyReward, 0, 0, MAX_ENERGY);
+  const energyBefore = clampInt(state.energy, MAX_ENERGY, 0, MAX_ENERGY);
+  const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
+  const recovered =
+    safeEnergy > 0
+      ? recoverEnergyFromBreak(
+          { ...state, energy: energyBefore, dailyStats, claimedDailyQuestIds },
+          safeEnergy,
+          nowMs,
+        )
+      : { ...state, energy: energyBefore, dailyStats, claimedDailyQuestIds };
+  const energyGained = recovered.energy - energyBefore;
+  return {
+    xpGained: safeXp,
+    energyGained,
+    newlyClaimed: true,
+    nextState: {
+      ...recovered,
+      xp: recovered.xp + safeXp,
+      lastEnergyTick: safeEnergy > 0 ? nowMs : recovered.lastEnergyTick,
+      claimedWorldInteractionIds: [...state.claimedWorldInteractionIds, cleanId],
+    },
+  };
+}
+
 export function recordFlashcardReview(
   state: PlayerProgressState,
   vocabId: string,
   knewIt: boolean,
   nowMs = Date.now(),
 ): { nextState: PlayerProgressState; xpGained: number; newBox: number } {
+  if (!vocabId) return { nextState: state, xpGained: 0, newBox: state.flashcardMastery[vocabId] ?? 0 };
   const curBox = state.flashcardMastery[vocabId] ?? 0;
   const newBox = knewIt ? Math.min(3, curBox + 1) : 0;
-  const xpGained = knewIt ? 8 : 3;
   const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
+  const xpGained =
+    !dailyStats.flashcardXpIds.includes(vocabId) && (newBox > curBox || !knewIt)
+      ? knewIt
+        ? 8
+        : 3
+      : 0;
 
   return {
     xpGained,
@@ -1300,7 +1672,11 @@ export function recordFlashcardReview(
       },
       dailyStats: {
         ...dailyStats,
-        flashcardsReviewed: dailyStats.flashcardsReviewed + 1,
+        flashcardsReviewed: Math.min(500, dailyStats.flashcardsReviewed + 1),
+        flashcardXpIds:
+          xpGained > 0
+            ? sanitizeStringArray([...dailyStats.flashcardXpIds, vocabId], 500)
+            : dailyStats.flashcardXpIds,
       },
       claimedDailyQuestIds,
     },
@@ -1312,9 +1688,11 @@ export function recordHanziPractice(
   hanziChar: string,
   nowMs = Date.now(),
 ): { nextState: PlayerProgressState; xpGained: number; isFirstTime: boolean } {
-  const isFirstTime = !state.practicedHanzi.includes(hanziChar);
-  const xpGained = isFirstTime ? 12 : 4;
+  const cleanChar = typeof hanziChar === "string" ? hanziChar.trim().slice(0, 16) : "";
+  if (!cleanChar) return { nextState: state, xpGained: 0, isFirstTime: false };
+  const isFirstTime = !state.practicedHanzi.includes(cleanChar);
   const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
+  const xpGained = dailyStats.hanziXpIds.includes(cleanChar) ? 0 : isFirstTime ? 12 : 4;
 
   return {
     xpGained,
@@ -1322,10 +1700,14 @@ export function recordHanziPractice(
     nextState: {
       ...state,
       xp: state.xp + xpGained,
-      practicedHanzi: isFirstTime ? [...state.practicedHanzi, hanziChar] : state.practicedHanzi,
+      practicedHanzi: isFirstTime ? [...state.practicedHanzi, cleanChar] : state.practicedHanzi,
       dailyStats: {
         ...dailyStats,
-        hanziPracticed: dailyStats.hanziPracticed + 1,
+        hanziPracticed: Math.min(500, dailyStats.hanziPracticed + 1),
+        hanziXpIds:
+          xpGained > 0
+            ? sanitizeStringArray([...dailyStats.hanziXpIds, cleanChar], 500, 16)
+            : dailyStats.hanziXpIds,
       },
       claimedDailyQuestIds,
     },
@@ -1336,19 +1718,24 @@ export function recordToneDrillSolved(
   state: PlayerProgressState,
   isCorrect: boolean,
   nowMs = Date.now(),
-): { nextState: PlayerProgressState; xpGained: number } {
-  const xpGained = isCorrect ? 10 : 0;
+): { nextState: PlayerProgressState; xpGained: number; capReached: boolean } {
   const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
-
+  const capReached = dailyStats.toneRewards >= MAX_DAILY_TONE_REWARDS;
+  const xpGained = isCorrect && !capReached ? 10 : 0;
   return {
     xpGained,
+    capReached,
     nextState: {
       ...state,
       xp: state.xp + xpGained,
       toneDrillsSolved: state.toneDrillsSolved + (isCorrect ? 1 : 0),
       dailyStats: {
         ...dailyStats,
-        quizzesSolved: dailyStats.quizzesSolved + (isCorrect ? 1 : 0),
+        quizzesSolved: Math.min(100, dailyStats.quizzesSolved + (isCorrect ? 1 : 0)),
+        toneRewards: Math.min(
+          MAX_DAILY_TONE_REWARDS,
+          dailyStats.toneRewards + (xpGained > 0 ? 1 : 0),
+        ),
       },
       claimedDailyQuestIds,
     },
@@ -1358,18 +1745,23 @@ export function recordToneDrillSolved(
 export function recordLiveVoiceTurn(
   state: PlayerProgressState,
   nowMs = Date.now(),
-): { nextState: PlayerProgressState; xpGained: number } {
-  const xpGained = 15;
+): { nextState: PlayerProgressState; xpGained: number; capReached: boolean } {
   const { dailyStats, claimedDailyQuestIds } = resolveDailyState(state, nowMs);
+  const capReached = dailyStats.voiceTurns >= MAX_DAILY_VOICE_REWARD_TURNS;
+  const xpGained = capReached ? 0 : 15;
   return {
     xpGained,
+    capReached,
     nextState: {
       ...state,
       xp: state.xp + xpGained,
-      liveVoiceTurns: state.liveVoiceTurns + 1,
+      liveVoiceTurns: state.liveVoiceTurns + (xpGained > 0 ? 1 : 0),
       dailyStats: {
         ...dailyStats,
-        voiceTurns: dailyStats.voiceTurns + 1,
+        voiceTurns: Math.min(
+          MAX_DAILY_VOICE_REWARD_TURNS,
+          dailyStats.voiceTurns + (xpGained > 0 ? 1 : 0),
+        ),
       },
       claimedDailyQuestIds,
     },
@@ -1538,8 +1930,13 @@ export function computeAchievements(
   state: PlayerProgressState,
   materi: MateriBundle,
 ): AchievementBadge[] {
-  const completedChapters = Object.values(state.chapters).filter((c) => c.stars > 0).length;
-  const totalStars = Object.values(state.chapters).reduce((acc, c) => acc + c.stars, 0);
+  const completedChapters = materi.chapters.filter((chapter) =>
+    isBossMastered(getChapterProgress(state, chapter.id), chapter),
+  ).length;
+  const totalStars = materi.chapters.reduce(
+    (sum, chapter) => sum + computeChapterStars(getChapterProgress(state, chapter.id), chapter),
+    0,
+  );
   const masteredCards = Object.values(state.flashcardMastery).filter((box) => box >= 2).length;
 
   return [
@@ -1641,11 +2038,11 @@ export function computeGraduationEligibility(
   materi: MateriBundle,
 ): GraduationSummary {
   const totalChapters = materi.chapters.length;
-  const completedChapters = materi.chapters.filter(
-    (ch) => (state.chapters[ch.id]?.stars ?? 0) > 0,
+  const completedChapters = materi.chapters.filter((chapter) =>
+    isBossMastered(getChapterProgress(state, chapter.id), chapter),
   ).length;
   const totalStars = materi.chapters.reduce(
-    (sum, ch) => sum + (state.chapters[ch.id]?.stars ?? 0),
+    (sum, chapter) => sum + computeChapterStars(getChapterProgress(state, chapter.id), chapter),
     0,
   );
   const maxStars = totalChapters * 3;

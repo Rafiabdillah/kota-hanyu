@@ -16,21 +16,37 @@ import {
   generateExamQuestions,
   generateToneDrillQuestion,
   getAdaptiveStanding,
+  getCompletedStagesCount,
   getDailyQuests,
   getDefaultProgressState,
+  getChapterProgress,
   getLevel,
+  getQuizCorrectCount,
+  getRecommendedStage,
   isBossMastered,
+  isPracticeComplete,
+  isQuizMastered,
   isStageUnlocked,
   loadProgressState,
+  MAX_DAILY_DYNAMIC_REWARDS,
+  MAX_DAILY_TONE_REWARDS,
+  MAX_DAILY_VOICE_REWARD_TURNS,
+  MAX_SAVE_CHARS,
   mergeLiveTranscriptChunk,
+  PROGRESS_VERSION,
+  recordChapterQuizOutcome,
+  recordDynamicPracticeXp,
   recordFlashcardReview,
   recordHanziPractice,
   recordLiveVoiceTurn,
   recordOrbCollected,
+  recordPracticeOutcome,
   recordQuizOutcome,
   recordToneDrillSolved,
+  recordWorldInteractionReward,
   recoverEnergyFromBreak,
   saveProgressState,
+  STORAGE_KEY,
   syncEnergyAndStreak,
   validateQuestionAnswer,
 } from "./engine";
@@ -151,6 +167,70 @@ test("calculateXpAward rewards streak and deducts heavy hint penalty", () => {
   assert.equal(noHint, 30);
 });
 
+test("practice and quiz completion require correct answers and preserve adaptive retries", () => {
+  const now = Date.UTC(2026, 6, 20, 9, 0, 0);
+  const chapter = MATERI.chapters[0];
+  let state = {
+    ...getDefaultProgressState(now),
+    chapters: {
+      [chapter.id]: { ...createEmptyChapterProgress(), pembukaDone: true, penjelasanDone: true },
+    },
+  };
+  const firstTask = chapter.latihan[0];
+  const outcome = (questionId: string, isCorrect: boolean) => ({
+    questionId,
+    chapterId: chapter.id,
+    conceptTag: firstTask.conceptTag,
+    topic: firstTask.topic,
+    isCorrect,
+    hintLevel: 0,
+    nowMs: now,
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const wrong = recordPracticeOutcome(state, outcome(firstTask.id, false));
+    assert.equal(wrong.xpGained, 0);
+    assert.equal(isPracticeComplete(getChapterProgress(wrong.nextState, chapter.id), chapter), false);
+    assert.equal(isStageUnlocked(getChapterProgress(wrong.nextState, chapter.id), chapter, "kuis"), false);
+    state = wrong.nextState;
+  }
+  assert.equal(getAdaptiveStanding(state), "butuh_bimbingan");
+  assert.equal(state.reviewQueue.length, 1);
+
+  const solved = recordPracticeOutcome(state, outcome(firstTask.id, true));
+  assert.ok(solved.xpGained > 0);
+  assert.equal(getChapterProgress(solved.nextState, chapter.id).latihanDoneIds.includes(firstTask.id), true);
+  assert.equal(solved.nextState.reviewQueue.length, 0);
+  assert.equal(getAdaptiveStanding(solved.nextState), "normal");
+  const replay = recordPracticeOutcome(solved.nextState, outcome(firstTask.id, true));
+  assert.equal(replay.xpGained, 0);
+  assert.equal(replay.nextState.xp, solved.nextState.xp);
+  state = replay.nextState;
+
+  for (const task of chapter.latihan.slice(1)) {
+    state = recordPracticeOutcome(state, outcome(task.id, true)).nextState;
+  }
+  assert.equal(isStageUnlocked(getChapterProgress(state, chapter.id), chapter, "kuis"), true);
+
+  for (const question of chapter.kuis) {
+    const wrong = recordChapterQuizOutcome(state, outcome(question.id, false));
+    assert.equal(wrong.xpGained, 0);
+    state = wrong.nextState;
+  }
+  assert.equal(isStageUnlocked(getChapterProgress(state, chapter.id), chapter, "boss"), false);
+  for (const question of chapter.kuis.slice(0, -1)) {
+    state = recordChapterQuizOutcome(state, outcome(question.id, true)).nextState;
+  }
+  assert.equal(isStageUnlocked(getChapterProgress(state, chapter.id), chapter, "boss"), false);
+  const lastQuestion = chapter.kuis.at(-1)!;
+  const corrected = recordChapterQuizOutcome(state, outcome(lastQuestion.id, true));
+  assert.ok(corrected.xpGained > 0);
+  assert.equal(isStageUnlocked(getChapterProgress(corrected.nextState, chapter.id), chapter, "boss"), true);
+  const quizReplay = recordChapterQuizOutcome(corrected.nextState, outcome(lastQuestion.id, true));
+  assert.equal(quizReplay.xpGained, 0);
+  assert.equal(quizReplay.nextState.xp, corrected.nextState.xp);
+});
+
 test("syncEnergyAndStreak recovers energy over time and increments streak next day", () => {
   const day1 = Date.UTC(2026, 5, 1, 10, 0, 0);
   const state = {
@@ -179,12 +259,14 @@ test("computeChapterStars awards 1 to 3 stars accurately and enforces Boss maste
   assert.equal(computeChapterStars(cp, ch1), 3);
 
   cp.kuisResults[ch1.kuis[0].id] = false;
-  assert.equal(computeChapterStars(cp, ch1), 2);
-
-  // Failing a boss step revokes boss mastery
-  cp.bossResults[ch1.boss.steps[0].id] = false;
   assert.equal(isBossMastered(cp, ch1), false);
   assert.equal(computeChapterStars(cp, ch1), 1);
+
+  cp.kuisResults[ch1.kuis[0].id] = true;
+  // Failing a boss step revokes boss mastery but keeps the unlocked-quiz stars.
+  cp.bossResults[ch1.boss.steps[0].id] = false;
+  assert.equal(isBossMastered(cp, ch1), false);
+  assert.equal(computeChapterStars(cp, ch1), 2);
 });
 
 test("isStageUnlocked enforces sequential 5-stage progression", () => {
@@ -207,6 +289,38 @@ test("isStageUnlocked enforces sequential 5-stage progression", () => {
 
   cp.kuisResults = Object.fromEntries(ch1.kuis.map((q) => [q.id, true]));
   assert.equal(isStageUnlocked(cp, ch1, "boss"), true);
+});
+
+test("boss progression requires every canonical quiz answer to be correct", () => {
+  const chapter = MATERI.chapters[0];
+  const cp = {
+    ...createEmptyChapterProgress(),
+    pembukaDone: true,
+    penjelasanDone: true,
+  };
+  cp.latihanDoneIds = chapter.latihan.map((task) => task.id);
+  cp.kuisResults = Object.fromEntries(chapter.kuis.map((question) => [question.id, false]));
+  cp.bossCompleted = true;
+  cp.bossStepDoneIds = chapter.boss.steps.map((step) => step.id);
+  cp.bossResults = Object.fromEntries(chapter.boss.steps.map((step) => [step.id, true]));
+
+  assert.equal(isPracticeComplete(cp, chapter), true);
+  assert.equal(isQuizMastered(cp, chapter), false);
+  assert.equal(isStageUnlocked(cp, chapter, "boss"), false);
+  assert.equal(getRecommendedStage(cp, chapter), "kuis");
+  assert.equal(getCompletedStagesCount(cp, chapter), 3);
+  assert.equal(computeChapterStars(cp, chapter), 1);
+  assert.equal(isBossMastered(cp, chapter), false);
+
+  cp.kuisResults[chapter.kuis.at(-1)!.id] = true;
+  assert.equal(isStageUnlocked(cp, chapter, "boss"), false);
+  chapter.kuis.forEach((question) => {
+    cp.kuisResults[question.id] = true;
+  });
+  assert.equal(isQuizMastered(cp, chapter), true);
+  assert.equal(getRecommendedStage(cp, chapter), "boss");
+  assert.equal(getCompletedStagesCount(cp, chapter), 5);
+  assert.equal(computeChapterStars(cp, chapter), 3);
 });
 
 test("recoverEnergyFromBreak restores soft energy and resets consecutive wrong count", () => {
@@ -246,23 +360,137 @@ test("generateExamQuestions and evaluateExamReadiness produce 15 questions and c
   assert.ok(evalRes.recommendedChapters.length >= 1);
 });
 
-test("safe localStorage load/save handles valid and corrupted data gracefully", () => {
+test("corrupted and legacy saves migrate without granting unverified mastery", () => {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const chapter = MATERI.chapters[0];
   const mem = new Map<string, string>();
-  const mockStorage = {
-    getItem: (k: string) => mem.get(k) ?? null,
-    setItem: (k: string, v: string) => {
-      mem.set(k, v);
-    },
+  const storage = {
+    getItem: (key: string) => mem.get(key) ?? null,
+    setItem: (key: string, value: string) => mem.set(key, value),
   };
-  const base = { ...getDefaultProgressState(1000), xp: 260 };
-  assert.equal(saveProgressState(base, mockStorage), true);
-  const loaded = loadProgressState(mockStorage);
-  assert.equal(loaded.xp, 260);
 
-  // Corrupted storage falls back cleanly
-  mem.set("hanyu_kota_kampus_3d_v3", "{not-valid-json");
-  const fallback = loadProgressState(mockStorage);
-  assert.equal(fallback.xp, 0);
+  mem.set(
+    STORAGE_KEY,
+    JSON.stringify({
+      xp: -10,
+      energy: 999,
+      chapters: {
+        [chapter.id]: {
+          pembukaDone: true,
+          penjelasanDone: true,
+          latihanDoneIds: chapter.latihan.map((task) => task.id),
+          kuisResults: Object.fromEntries(chapter.kuis.map((question) => [question.id, false])),
+          bossStepDoneIds: chapter.boss.steps.map((step) => step.id),
+          bossCompleted: true,
+          stars: 3,
+        },
+      },
+      dailyStats: { date: "2000-01-01", quizzesSolved: 999, voiceTurns: 999 },
+    }),
+  );
+  const legacy = loadProgressState(storage);
+  const legacyCp = getChapterProgress(legacy, chapter.id);
+  assert.equal(legacy.progressVersion, PROGRESS_VERSION);
+  assert.equal(legacy.xp, 0);
+  assert.equal(legacy.energy, 5);
+  assert.deepEqual(legacyCp.latihanDoneIds, []);
+  assert.equal(legacyCp.bossCompleted, false);
+  assert.equal(legacyCp.stars, 0);
+  assert.equal(isBossMastered(legacyCp, chapter), false);
+  assert.equal(isStageUnlocked(legacyCp, chapter, "boss"), false);
+  assert.equal(legacy.dailyStats.date, today);
+  assert.equal(legacy.dailyStats.quizzesSolved, 0);
+
+  mem.set(
+    STORAGE_KEY,
+    JSON.stringify({
+      progressVersion: PROGRESS_VERSION,
+      xp: "not-a-number",
+      energy: Number.NaN,
+      streak: -50,
+      speechRate: 50,
+      lastExamScore: -20,
+      bestExamScore: 500,
+      chapters: {
+        [chapter.id]: {
+          pembukaDone: "yes",
+          latihanDoneIds: [
+            ...chapter.latihan.map((task) => task.id),
+            ...chapter.latihan.map((task) => task.id),
+            "fake-task",
+            ...Array(1000).fill("oversized"),
+          ],
+          kuisResults: {
+            [chapter.kuis[0].id]: true,
+            [chapter.kuis[1].id]: "true",
+            fake_question: true,
+          },
+          bossResults: { [chapter.boss.steps[0].id]: true },
+          bossCompleted: true,
+          stars: 999,
+        },
+        fake_chapter: { stars: 3 },
+      },
+      collectedOrbIds: [CAMPUS_ORBS[0].id, CAMPUS_ORBS[0].id, "fake", ...Array(1000).fill("x")],
+      flashcardMastery: { v1_1: 99, fake: 3, v1_2: Number.NaN },
+      practicedHanzi: [...Array(3000).fill("好")],
+      dailyStats: {
+        date: today,
+        quizzesSolved: 9999,
+        orbsCollected: -4,
+        voiceTurns: 999,
+        flashcardsReviewed: Number.NaN,
+        hanziPracticed: 9999,
+        dynamicPracticeRewards: 99,
+        toneRewards: -1,
+        flashcardXpIds: ["v1_1", "v1_1", ...Array(1000).fill("x")],
+        hanziXpIds: "bad-array",
+      },
+      claimedDailyQuestIds: ["dq_quiz", "dq_quiz", "fake"],
+    }),
+  );
+  const clamped = loadProgressState(storage);
+  const cp = getChapterProgress(clamped, chapter.id);
+  assert.equal(clamped.xp, 0);
+  assert.equal(clamped.energy, 5);
+  assert.equal(clamped.streak, 1);
+  assert.equal(clamped.speechRate, 1.3);
+  assert.equal(clamped.lastExamScore, 0);
+  assert.equal(clamped.bestExamScore, 100);
+  assert.deepEqual(cp.latihanDoneIds, chapter.latihan.map((task) => task.id));
+  assert.deepEqual(Object.keys(cp.kuisResults), [chapter.kuis[0].id]);
+  assert.equal(cp.bossCompleted, false);
+  assert.equal(cp.stars, 1);
+  assert.equal(clamped.chapters.fake_chapter, undefined);
+  assert.deepEqual(clamped.collectedOrbIds, [CAMPUS_ORBS[0].id]);
+  assert.deepEqual(clamped.flashcardMastery, { v1_1: 3, v1_2: 0 });
+  assert.deepEqual(clamped.practicedHanzi, ["好"]);
+  assert.equal(clamped.dailyStats.quizzesSolved, 100);
+  assert.equal(clamped.dailyStats.orbsCollected, 0);
+  assert.equal(clamped.dailyStats.voiceTurns, MAX_DAILY_VOICE_REWARD_TURNS);
+  assert.equal(clamped.dailyStats.flashcardsReviewed, 0);
+  assert.equal(clamped.dailyStats.hanziPracticed, 500);
+  assert.equal(clamped.dailyStats.dynamicPracticeRewards, MAX_DAILY_DYNAMIC_REWARDS);
+  assert.equal(clamped.dailyStats.toneRewards, 0);
+  assert.ok(clamped.dailyStats.flashcardXpIds.length <= 500);
+  assert.deepEqual(clamped.dailyStats.hanziXpIds, []);
+  assert.deepEqual(clamped.claimedDailyQuestIds, ["dq_quiz"]);
+
+  mem.set(STORAGE_KEY, "x".repeat(MAX_SAVE_CHARS + 1));
+  assert.equal(loadProgressState(storage).xp, 0);
+  assert.deepEqual(loadProgressState(storage).chapters, {});
+
+  const current = getDefaultProgressState(now);
+  current.chapters[chapter.id] = {
+    ...createEmptyChapterProgress(),
+    latihanDoneIds: chapter.latihan.map((task) => task.id),
+  };
+  saveProgressState(current, storage);
+  assert.deepEqual(
+    getChapterProgress(loadProgressState(storage), chapter.id).latihanDoneIds,
+    chapter.latihan.map((task) => task.id),
+  );
 });
 
 test("recordOrbCollected awards XP once and completes campus orb daily quest", () => {
@@ -290,6 +518,69 @@ test("recordOrbCollected awards XP once and completes campus orb daily quest", (
   // Cannot double claim
   const reclaimed = claimDailyQuestBonus(claimed.nextState, "dq_orbs", now);
   assert.equal(reclaimed.xpGained, 0);
+});
+
+test("repeatable rewards are capped while first-time exploration and next-day rewards remain", () => {
+  const day1 = Date.UTC(2026, 6, 21, 9, 0, 0);
+  const day2 = day1 + 86400000;
+  let state = { ...getDefaultProgressState(day1), energy: 1 };
+  const firstWorld = recordWorldInteractionReward(state, "facility-cafe", 10, 2, day1);
+  assert.equal(firstWorld.newlyClaimed, true);
+  assert.equal(firstWorld.xpGained, 10);
+  assert.equal(firstWorld.energyGained, 2);
+  state = firstWorld.nextState;
+  const repeatedWorld = recordWorldInteractionReward(state, "facility-cafe", 10, 2, day1);
+  assert.equal(repeatedWorld.newlyClaimed, false);
+  assert.equal(repeatedWorld.xpGained, 0);
+  assert.equal(repeatedWorld.nextState.xp, 10);
+  assert.equal(repeatedWorld.nextState.energy, 3);
+  const nextWorld = recordWorldInteractionReward(state, "facility-mall", 15, 1, day1);
+  assert.equal(nextWorld.xpGained, 15);
+  assert.equal(recordWorldInteractionReward(nextWorld.nextState, "facility-cafe", 10, 2, day2).xpGained, 0);
+
+  for (let i = 0; i < MAX_DAILY_DYNAMIC_REWARDS; i += 1) {
+    const reward = recordDynamicPracticeXp(state, 15, day1);
+    assert.equal(reward.xpGained, 15);
+    state = reward.nextState;
+  }
+  assert.equal(recordDynamicPracticeXp(state, 15, day1).xpGained, 0);
+  assert.equal(recordDynamicPracticeXp(state, 15, day1).capReached, true);
+  assert.equal(recordDynamicPracticeXp(state, 15, day2).xpGained, 15);
+
+  state = getDefaultProgressState(day1);
+  for (let i = 0; i < MAX_DAILY_VOICE_REWARD_TURNS; i += 1) {
+    const reward = recordLiveVoiceTurn(state, day1);
+    assert.equal(reward.xpGained, 15);
+    state = reward.nextState;
+  }
+  assert.equal(state.xp, MAX_DAILY_VOICE_REWARD_TURNS * 15);
+  assert.equal(recordLiveVoiceTurn(state, day1).xpGained, 0);
+  assert.equal(recordLiveVoiceTurn(state, day1).nextState.xp, state.xp);
+  assert.equal(recordLiveVoiceTurn(state, day2).xpGained, 15);
+
+  state = getDefaultProgressState(day1);
+  for (let i = 0; i < MAX_DAILY_TONE_REWARDS + 3; i += 1) {
+    state = recordToneDrillSolved(state, true, day1).nextState;
+  }
+  assert.equal(state.xp, MAX_DAILY_TONE_REWARDS * 10);
+  assert.equal(state.dailyStats.toneRewards, MAX_DAILY_TONE_REWARDS);
+  assert.equal(recordToneDrillSolved(state, true, day2).xpGained, 10);
+
+  state = getDefaultProgressState(day1);
+  const card1 = recordFlashcardReview(state, "v1_1", true, day1);
+  assert.equal(card1.xpGained, 8);
+  const card2 = recordFlashcardReview(card1.nextState, "v1_1", true, day1);
+  assert.equal(card2.xpGained, 0);
+  assert.equal(card2.newBox, 2);
+  const card3 = recordFlashcardReview(card2.nextState, "v1_1", true, day1);
+  assert.equal(card3.xpGained, 0);
+  assert.equal(card3.newBox, 3);
+  assert.equal(recordFlashcardReview(card3.nextState, "v1_1", true, day2).xpGained, 0);
+
+  const hanzi1 = recordHanziPractice(state, "好", day1);
+  assert.equal(hanzi1.xpGained, 12);
+  assert.equal(recordHanziPractice(hanzi1.nextState, "好", day1).xpGained, 0);
+  assert.equal(recordHanziPractice(hanzi1.nextState, "好", day2).xpGained, 4);
 });
 
 test("flashcard review, Hanzi practice, tone drill, and achievements update state accurately", () => {
@@ -383,13 +674,22 @@ test("computeGraduationEligibility evaluates rehearsal vs full graduation honors
   assert.equal(pre.completedChapters, 0);
   assert.equal(pre.rankMandarin, "汉语学院结业预备");
 
+  const forgedChapters: PlayerProgressState["chapters"] = {
+    [MATERI.chapters[0].id]: { ...createEmptyChapterProgress(), stars: 3 },
+  };
+  assert.equal(computeGraduationEligibility({ ...base, chapters: forgedChapters }, MATERI).isEligible, false);
+
   const chaptersAll3: PlayerProgressState["chapters"] = {};
   for (const ch of MATERI.chapters) {
     chaptersAll3[ch.id] = {
       ...createEmptyChapterProgress(),
       pembukaDone: true,
       penjelasanDone: true,
+      latihanDoneIds: ch.latihan.map((task) => task.id),
+      kuisResults: Object.fromEntries(ch.kuis.map((question) => [question.id, true])),
       bossCompleted: true,
+      bossStepDoneIds: ch.boss.steps.map((step) => step.id),
+      bossResults: Object.fromEntries(ch.boss.steps.map((step) => [step.id, true])),
       stars: 3,
     };
   }

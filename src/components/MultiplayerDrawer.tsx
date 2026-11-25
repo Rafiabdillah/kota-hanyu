@@ -27,6 +27,7 @@ import {
   buildRandomChatStudyCard,
   PLAYER_JACKET_COLORS,
   QUICK_MANDARIN_EMOTES,
+  SOCIAL_EMOTES,
   sanitizePlayerName,
   sanitizeRoomId,
   type AvatarGender,
@@ -35,8 +36,17 @@ import {
   type MiniGameSnapshot,
   type MultiplayerChatEntry,
   type RemotePlayerSnapshot,
+  type SocialEmoteKind,
 } from "../game/multiplayer";
 import type { MultiplayerProfile, MultiplayerStatus } from "../game/multiplayerClient";
+import {
+  AVATAR_HAIR_COLORS,
+  AVATAR_SKIN_TONES,
+  AVATAR_STYLE_PRESETS,
+  getAvatarStyle,
+  sanitizeAvatarAppearance,
+  type AvatarAppearance,
+} from "../game/avatar";
 import { speakMandarin } from "../game/audio";
 
 export type MultiplayerDrawerTab = "chat" | "players" | "games" | "room";
@@ -64,6 +74,7 @@ interface MultiplayerDrawerProps {
     emoteOnly?: boolean,
     studyCard?: ChatStudyCard,
   ) => boolean;
+  onSendSocialEmote?: (kind: SocialEmoteKind) => void;
   onSolveStudyCard?: (entryId: string, isCorrect: boolean) => void;
   onWalkToPlayer: (player: RemotePlayerSnapshot) => void;
   onStartMiniGame: (kind: MiniGameKind, chapterFilter?: string) => void;
@@ -88,6 +99,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
   onToggleEnabled,
   onSaveProfile,
   onSendChat,
+  onSendSocialEmote,
   onSolveStudyCard,
   onWalkToPlayer,
   onStartMiniGame,
@@ -97,12 +109,21 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
   const [roomDraft, setRoomDraft] = useState(profile.roomId);
   const [colorDraft, setColorDraft] = useState(profile.colorHex);
   const [genderDraft, setGenderDraft] = useState<AvatarGender>(profile.gender ?? "boy");
+  const [appearanceDraft, setAppearanceDraft] = useState<AvatarAppearance>(() =>
+    sanitizeAvatarAppearance(
+      profile.appearance,
+      profile.gender ?? "boy",
+    ),
+  );
   const [chatDraft, setChatDraft] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [chapterFilter, setChapterFilter] = useState<string>("all");
   const [solvedCards, setSolvedCards] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<MultiplayerDrawerTab>(initialTab ?? "chat");
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (isOpen && initialTab) {
@@ -115,6 +136,12 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
     setRoomDraft(profile.roomId);
     setColorDraft(profile.colorHex);
     setGenderDraft(profile.gender ?? "boy");
+    setAppearanceDraft(
+      sanitizeAvatarAppearance(
+        profile.appearance,
+        profile.gender ?? "boy",
+      ),
+    );
   }, [profile]);
 
   useEffect(() => {
@@ -123,9 +150,53 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
     }
   }, [chats, isOpen, tab]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const focusableSelector =
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusFirst = () => dialog?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    focusFirst();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const onlineTotal = enabled && status === "connected" ? remotePlayers.length + 1 : 0;
+  const availableStyles = AVATAR_STYLE_PRESETS.filter((preset) => preset.gender === genderDraft);
+  const updateAppearance = (patch: Partial<AvatarAppearance>) => {
+    setAppearanceDraft((prev) => sanitizeAvatarAppearance({ ...prev, ...patch }, genderDraft));
+  };
+  const changeGender = (gender: AvatarGender) => {
+    setGenderDraft(gender);
+    setAppearanceDraft((prev) =>
+      sanitizeAvatarAppearance({ hairColor: prev.hairColor, skinTone: prev.skinTone }, gender),
+    );
+  };
 
   const miniGameTitle = (kind: MiniGameKind) => {
     if (kind === "quiz_battle") return "Cerdas Cermat Live (汉语抢答赛)";
@@ -156,6 +227,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
       colorHex: colorDraft,
       roomId: sanitizeRoomId(roomDraft),
       gender: genderDraft,
+      appearance: sanitizeAvatarAppearance(appearanceDraft, genderDraft),
     };
     onSaveProfile(next);
     if (!enabled) {
@@ -192,6 +264,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
@@ -241,6 +314,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
             <button
               type="button"
               data-testid="mp-close-btn"
+              data-mp-close
               onClick={onClose}
               aria-label="Tutup Panel Multiplayer"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
@@ -372,6 +446,23 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                   ))}
                 </div>
               </div>
+
+              {onSendSocialEmote && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">Aksi 3D:</span>
+                  {SOCIAL_EMOTES.map((emote) => (
+                    <button
+                      key={emote.kind}
+                      type="button"
+                      disabled={status !== "connected"}
+                      onClick={() => onSendSocialEmote(emote.kind)}
+                      className="rounded-lg border border-pink-200 bg-pink-50 px-2.5 py-1 text-[11px] font-bold text-pink-800 transition hover:border-pink-500 hover:bg-pink-100 disabled:opacity-50 dark:border-pink-900 dark:bg-pink-950/40 dark:text-pink-200"
+                    >
+                      {emote.label} <span className="hanzi-text opacity-70">{emote.hanzi}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Chat Log */}
               <div
@@ -573,7 +664,8 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                           </span>
                         </div>
                         <div className="font-mono-num text-[11px] text-slate-500 dark:text-slate-400">
-                          {chapterLabel(rp.activeChapterId)} · {rp.xp} XP · {rp.starsTotal}★
+                          {getAvatarStyle(rp.appearance?.styleId).label}{" "}
+                          · {chapterLabel(rp.activeChapterId)} · {rp.xp} XP · {rp.starsTotal}★
                         </div>
                       </div>
                     </div>
@@ -632,7 +724,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                       </div>
                     </div>
 
-                    {minigame.phase !== "ended" && (
+                    {minigame.phase !== "ended" && minigame.hostId === selfId && (
                       <button
                         type="button"
                         data-testid="mp-stop-minigame-btn"
@@ -1013,7 +1105,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                   <button
                     type="button"
                     data-testid="mp-gender-boy"
-                    onClick={() => setGenderDraft("boy")}
+                    onClick={() => changeGender("boy")}
                     className={`rounded-xl border px-3 py-2 text-left text-xs font-bold transition ${
                       genderDraft === "boy"
                         ? "border-blue-700 bg-blue-50 text-blue-950 dark:border-blue-400 dark:bg-blue-950/60 dark:text-white"
@@ -1026,7 +1118,7 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                   <button
                     type="button"
                     data-testid="mp-gender-girl"
-                    onClick={() => setGenderDraft("girl")}
+                    onClick={() => changeGender("girl")}
                     className={`rounded-xl border px-3 py-2 text-left text-xs font-bold transition ${
                       genderDraft === "girl"
                         ? "border-pink-600 bg-pink-50 text-pink-950 dark:border-pink-400 dark:bg-pink-950/50 dark:text-white"
@@ -1036,6 +1128,77 @@ export const MultiplayerDrawer: React.FC<MultiplayerDrawerProps> = ({
                     <div>Cewe Imut</div>
                     <div className="text-[10px] font-normal opacity-80">Pita kembar &amp; rok lipit</div>
                   </button>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Pilih gaya ({availableStyles.length} pilihan):
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {availableStyles.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      data-testid={`mp-style-${preset.id}`}
+                      onClick={() => updateAppearance({ styleId: preset.id })}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        appearanceDraft.styleId === preset.id
+                          ? "border-amber-500 bg-amber-50 ring-1 ring-amber-400 dark:bg-amber-950/40"
+                          : "border-slate-200 bg-white hover:border-amber-400 dark:border-slate-700 dark:bg-slate-800"
+                      }`}
+                    >
+                      <span className="block text-xs font-extrabold text-slate-800 dark:text-slate-100">
+                        {preset.label} <span className="hanzi-text opacity-70">{preset.hanzi}</span>
+                      </span>
+                      <span className="mt-0.5 block text-[10px] leading-snug text-slate-500 dark:text-slate-400">
+                        {preset.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">Warna rambut:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {AVATAR_HAIR_COLORS.map((color) => (
+                      <button
+                        key={color.hex}
+                        type="button"
+                        aria-label={`Pilih rambut ${color.label}`}
+                        title={color.label}
+                        onClick={() => updateAppearance({ hairColor: color.hex })}
+                        className={`h-6 w-6 rounded-full border-2 ${
+                          appearanceDraft.hairColor === color.hex
+                            ? "scale-110 border-amber-500 ring-2 ring-amber-300"
+                            : "border-white/90"
+                        }`}
+                        style={{ backgroundColor: color.hex }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1.5 text-xs font-bold text-slate-700 dark:text-slate-200">Warna kulit:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {AVATAR_SKIN_TONES.map((tone) => (
+                      <button
+                        key={tone.hex}
+                        type="button"
+                        aria-label={`Pilih kulit ${tone.label}`}
+                        title={tone.label}
+                        onClick={() => updateAppearance({ skinTone: tone.hex })}
+                        className={`h-6 w-6 rounded-full border-2 ${
+                          appearanceDraft.skinTone === tone.hex
+                            ? "scale-110 border-amber-500 ring-2 ring-amber-300"
+                            : "border-white/90"
+                        }`}
+                        style={{ backgroundColor: tone.hex }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
 

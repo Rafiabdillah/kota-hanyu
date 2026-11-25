@@ -65,6 +65,27 @@ export function computeResponsiveFov(aspect: number): number {
   return 48;
 }
 
+export function computeAdaptivePixelRatio(
+  current: number,
+  averageFrameMs: number,
+  min: number,
+  max: number,
+): number {
+  const lower = Math.max(0.5, Math.min(min, max));
+  const upper = Math.max(lower, max);
+  const safeCurrent = Number.isFinite(current)
+    ? Math.max(lower, Math.min(upper, current))
+    : upper;
+  if (!Number.isFinite(averageFrameMs) || averageFrameMs <= 0) return safeCurrent;
+  if (averageFrameMs > 27) {
+    return Math.max(lower, Math.round((safeCurrent - 0.15) * 100) / 100);
+  }
+  if (averageFrameMs < 18) {
+    return Math.min(upper, Math.round((safeCurrent + 0.1) * 100) / 100);
+  }
+  return safeCurrent;
+}
+
 /**
  * Shortest signed angle delta from `from` to `to` in [-PI, PI].
  */

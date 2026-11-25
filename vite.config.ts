@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+const projectRoot = import.meta.dirname;
+
 export default defineConfig(() => {
   return {
     plugins: [
@@ -19,8 +21,8 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
+          const distDir = path.resolve(projectRoot, 'dist');
+          const srcAssets = path.resolve(projectRoot, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
@@ -30,7 +32,47 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(projectRoot, '.'),
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: 'curriculum',
+                test: /src[\\/]data[\\/]materi\.ts/,
+                priority: 4,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: 'three-core',
+                test: /node_modules[\\/]three[\\/]build[\\/]three\.core\.js/,
+                priority: 3,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: 'three-renderer',
+                test: /node_modules[\\/]three[\\/]/,
+                priority: 2,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+                priority: 2,
+                includeDependenciesRecursively: false,
+              },
+              {
+                name: 'ui-vendor',
+                test: /node_modules[\\/](lucide-react|motion)[\\/]/,
+                priority: 1,
+                includeDependenciesRecursively: false,
+              },
+            ],
+          },
+        },
       },
     },
     server: {

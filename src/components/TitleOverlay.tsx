@@ -1,6 +1,13 @@
 import React from "react";
 import { Play, BookOpen, Compass, Sparkles } from "lucide-react";
 import { PLAYER_JACKET_COLORS, type AvatarGender } from "../game/multiplayer";
+import {
+  AVATAR_HAIR_COLORS,
+  AVATAR_SKIN_TONES,
+  AVATAR_STYLE_PRESETS,
+  sanitizeAvatarAppearance,
+  type AvatarAppearance,
+} from "../game/avatar";
 
 interface TitleOverlayProps {
   hasSavedProgress: boolean;
@@ -10,7 +17,9 @@ interface TitleOverlayProps {
   totalOrbsCount?: number;
   selectedGender: AvatarGender;
   selectedColorHex: string;
+  selectedAppearance?: AvatarAppearance;
   onSelectGender: (gender: AvatarGender) => void;
+  onSelectAppearance?: (appearance: AvatarAppearance) => void;
   onSelectColor: (hex: string) => void;
   onStart: () => void;
   onOpenCurriculumInfo: () => void;
@@ -24,11 +33,19 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   totalOrbsCount = 7,
   selectedGender,
   selectedColorHex,
+  selectedAppearance,
   onSelectGender,
+  onSelectAppearance,
   onSelectColor,
   onStart,
   onOpenCurriculumInfo,
 }) => {
+  const appearance = sanitizeAvatarAppearance(selectedAppearance, selectedGender);
+  const availableStyles = AVATAR_STYLE_PRESETS.filter((preset) => preset.gender === selectedGender);
+  const updateAppearance = (patch: Partial<AvatarAppearance>) => {
+    onSelectAppearance?.(sanitizeAvatarAppearance({ ...appearance, ...patch }, selectedGender));
+  };
+
   return (
     <div className="pointer-events-none fixed inset-0 z-20 flex flex-col justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-8">
       {/* Upper-Left Calm Negative-Space Lockup */}
@@ -78,7 +95,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               Kota &amp; Kampus Hanyu
             </h1>
             <p className="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-300 sm:text-sm">
-              24 Bangunan · Mode Skuter · Mini-Game Online · Suara Live
+              24 Bangunan · 8 Gaya Karakter · Mini-Game Online · Suara Live
             </p>
           </div>
         </div>
@@ -129,6 +146,77 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               <span className="text-xs font-extrabold">Cewe Imut (可爱女生)</span>
               <span className="text-[10px] font-medium opacity-80">Pita kembar, rok lipit &amp; wajah manis</span>
             </button>
+          </div>
+
+          <div className="mt-3">
+            <div className="mb-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+              Gaya karakter ({availableStyles.length} pilihan):
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {availableStyles.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  data-testid={`title-style-${preset.id}`}
+                  onClick={() => updateAppearance({ styleId: preset.id })}
+                  className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                    appearance.styleId === preset.id
+                      ? "border-amber-500 bg-amber-50 ring-1 ring-amber-400 dark:bg-amber-950/40"
+                      : "border-slate-200 bg-white hover:border-amber-400 dark:border-slate-700 dark:bg-slate-900"
+                  }`}
+                >
+                  <span className="block text-[11px] font-extrabold text-slate-800 dark:text-slate-100">
+                    {preset.label} <span className="hanzi-text opacity-70">{preset.hanzi}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-snug text-slate-500 dark:text-slate-400">
+                    {preset.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">Warna rambut:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {AVATAR_HAIR_COLORS.map((color) => (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    aria-label={`Pilih rambut ${color.label}`}
+                    title={color.label}
+                    onClick={() => updateAppearance({ hairColor: color.hex })}
+                    className={`h-5 w-5 rounded-full border-2 ${
+                      appearance.hairColor === color.hex
+                        ? "scale-110 border-amber-500 ring-2 ring-amber-300"
+                        : "border-white/90"
+                    }`}
+                    style={{ backgroundColor: color.hex }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">Warna kulit:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {AVATAR_SKIN_TONES.map((tone) => (
+                  <button
+                    key={tone.hex}
+                    type="button"
+                    aria-label={`Pilih kulit ${tone.label}`}
+                    title={tone.label}
+                    onClick={() => updateAppearance({ skinTone: tone.hex })}
+                    className={`h-5 w-5 rounded-full border-2 ${
+                      appearance.skinTone === tone.hex
+                        ? "scale-110 border-amber-500 ring-2 ring-amber-300"
+                        : "border-white/90"
+                    }`}
+                    style={{ backgroundColor: tone.hex }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">

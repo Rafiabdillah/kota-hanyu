@@ -1,3 +1,4 @@
+import { sanitizeAvatarAppearance, type AvatarAppearance } from "./avatar";
 import { CAMPUS_FACILITIES, CHAPTER_WORLD_COORDS, FLOOR_2_Y, FLOOR_3_Y, WORLD_BOUNDS } from "./worldLayout";
 
 export const DEFAULT_MULTIPLAYER_ROOM = "kampus-utama";
@@ -117,12 +118,20 @@ export interface QuizBattleQuestion {
   pinyin?: string;
   audioText?: string;
   options: [string, string, string, string];
-  correctIdx: number;
-  explain: string;
+  /** Withheld from clients until the answer is revealed. */
+  correctIdx?: number;
+  /** Withheld from clients until the answer is revealed. */
+  explain?: string;
   answeredPlayerIds: string[];
   revealActive?: boolean;
   firstSolverName?: string | null;
 }
+
+/** The server-only form always contains the answer. */
+export type ServerQuizBattleQuestion = QuizBattleQuestion & {
+  correctIdx: number;
+  explain: string;
+};
 
 export interface WordHunterPrompt {
   chapterId: string;
@@ -160,11 +169,38 @@ export interface MiniGameSnapshot {
   winnerSummary: string | null;
 }
 
+/** Authoritative room state; never serialize this directly to a client. */
+export interface ServerMiniGameSnapshot extends Omit<MiniGameSnapshot, "quizQuestion"> {
+  quizQuestion?: ServerQuizBattleQuestion | null;
+}
+
+export function serializeMiniGameSnapshot(
+  minigame: ServerMiniGameSnapshot | MiniGameSnapshot | null,
+): MiniGameSnapshot | null {
+  if (!minigame) return null;
+  const question = minigame.quizQuestion;
+  if (!question) return { ...minigame, quizQuestion: null };
+
+  const { correctIdx: _correctIdx, explain: _explain, ...publicQuestion } = question;
+  const revealAnswer = Boolean(question.revealActive) || minigame.phase === "ended";
+  return {
+    ...minigame,
+    quizQuestion: revealAnswer
+      ? {
+          ...publicQuestion,
+          correctIdx: question.correctIdx,
+          explain: question.explain,
+        }
+      : publicQuestion,
+  };
+}
+
 export interface RemotePlayerSnapshot {
   id: string;
   name: string;
   colorHex: string;
   gender?: AvatarGender;
+  appearance?: AvatarAppearance;
   x: number;
   y: number;
   z: number;
@@ -217,6 +253,7 @@ export type MultiplayerServerMessage =
       type: "world:init";
       selfId: string;
       roomId: string;
+      hostId?: string;
       players: RemotePlayerSnapshot[];
       recentChats: MultiplayerChatEntry[];
       minigame?: MiniGameSnapshot | null;
@@ -244,6 +281,7 @@ export type MultiplayerServerMessage =
       name: string;
       colorHex: string;
       gender?: AvatarGender;
+      appearance?: Partial<AvatarAppearance>;
     }
   | {
       type: "player:chat";
@@ -301,6 +339,7 @@ export type MultiplayerClientMessage =
       name: string;
       colorHex: string;
       gender?: AvatarGender;
+      appearance?: Partial<AvatarAppearance>;
     }
   | {
       type: "player:chat";
@@ -371,6 +410,18 @@ export function sanitizeChatText(raw?: string): string {
     .slice(0, 90);
 }
 
+/** Limit user roleplay context and remove delimiter/control-character tricks. */
+export function sanitizeScenarioPrompt(raw?: unknown, maxLength = 180): string {
+  if (typeof raw !== "string") return "";
+  return raw
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, " ")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, Math.max(0, Math.min(500, maxLength)));
+}
+
 export function clampWorldCoords(
   x: unknown,
   y: unknown,
@@ -383,10 +434,106 @@ export function clampWorldCoords(
   const cy = Math.max(0, Math.min(12, safeNum(y, 0)));
   const cz = Math.max(WORLD_BOUNDS.minZ, Math.min(WORLD_BOUNDS.maxZ, safeNum(z, 14)));
   let cyaw = safeNum(yaw, Math.PI);
-  if (cyaw > Math.PI * 4 || cyaw < -Math.PI * 4) {
+  if (!Number.isFinite(cyaw) || Math.abs(cyaw) > Math.PI * 4) {
     cyaw = Math.PI;
   }
-  return { x: cx, y: cy, z: cz, yaw: cyaw };
+  cyaw = Math.atan2(Math.sin(cyaw), Math.cos(cyaw));
+  return {
+    x: Number(cx.toFixed(3)),
+    y: Number(cy.toFixed(3)),
+    z: Number(cz.toFixed(3)),
+    yaw: cyaw,
+  };
+}
+
+export const MAX_MOVEMENT_HORIZONTAL_SPEED = 32; // Covers sprint + scooter + boost (~30.5 units/s).
+export const MAX_MOVEMENT_VERTICAL_SPEED = 24;
+export const MAX_XP_DELTA_PER_UPDATE = 60;
+export const MAX_STARS_DELTA_PER_UPDATE = 1;
+export const MAX_DISPLAYED_XP = 999999;
+export const MAX_DISPLAYED_STARS = 21;
+
+export interface MovementValidationResult {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  isSprinting: boolean;
+  activeChapterId: string;
+}
+
+/**
+ * Validate a claimed position against the last accepted position and elapsed
+ * server time. Invalid/missing numeric fields retain the previous value.
+ */
+export function validateMovementUpdate(
+  previous: MovementValidationResult | null,
+  raw: unknown,
+  elapsedMs: number,
+): MovementValidationResult | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return null;
+  const input = raw as Record<string, unknown>;
+  const finiteOr = (value: unknown, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const base = previous ?? {
+    x: 0,
+    y: 0,
+    z: 14,
+    yaw: Math.PI,
+    isSprinting: false,
+    activeChapterId: "bab1",
+  };
+  const coords = clampWorldCoords(
+    finiteOr(input.x, base.x),
+    finiteOr(input.y, base.y),
+    finiteOr(input.z, base.z),
+    finiteOr(input.yaw, base.yaw),
+  );
+  const isSprinting = input.isSprinting === true;
+  const activeChapterId =
+    typeof input.activeChapterId === "string"
+      ? sanitizeChapterId(input.activeChapterId)
+      : base.activeChapterId;
+
+  if (previous) {
+    const elapsedSec = Math.min(elapsedMs, 5000) / 1000;
+    const horizontalDistance = computeDistanceXZ(previous.x, previous.z, coords.x, coords.z);
+    const verticalDistance = Math.abs(previous.y - coords.y);
+    const horizontalLimit =
+      (isSprinting ? MAX_MOVEMENT_HORIZONTAL_SPEED : 14) * elapsedSec + 0.5;
+    if (horizontalDistance > horizontalLimit || verticalDistance > MAX_MOVEMENT_VERTICAL_SPEED * elapsedSec + 0.5) {
+      return null;
+    }
+  }
+
+  return { ...coords, isSprinting, activeChapterId };
+}
+
+/** Progress may only rise, by a bounded amount per accepted update. */
+export function sanitizeProgressUpdate(
+  previous: { xp: number; starsTotal: number },
+  rawXp: unknown,
+  rawStars: unknown,
+): { xp: number; starsTotal: number } {
+  const bounded = (value: unknown, fallback: number, max: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.min(max, Math.floor(value)))
+      : fallback;
+  return {
+    xp: Math.max(
+      previous.xp,
+      Math.min(MAX_DISPLAYED_XP, previous.xp + MAX_XP_DELTA_PER_UPDATE, bounded(rawXp, previous.xp, MAX_DISPLAYED_XP)),
+    ),
+    starsTotal: Math.max(
+      previous.starsTotal,
+      Math.min(
+        MAX_DISPLAYED_STARS,
+        previous.starsTotal + MAX_STARS_DELTA_PER_UPDATE,
+        bounded(rawStars, previous.starsTotal, MAX_DISPLAYED_STARS),
+      ),
+    ),
+  };
 }
 
 export function shouldEmitMovementDelta(
@@ -397,6 +544,8 @@ export function shouldEmitMovementDelta(
     yaw: number;
     isSprinting: boolean;
     activeChapterId: string;
+    xp?: number;
+    starsTotal?: number;
   } | null,
   next: {
     x: number;
@@ -405,6 +554,8 @@ export function shouldEmitMovementDelta(
     yaw: number;
     isSprinting: boolean;
     activeChapterId: string;
+    xp?: number;
+    starsTotal?: number;
   },
   elapsedSinceLastEmitMs: number,
 ): boolean {
@@ -416,7 +567,9 @@ export function shouldEmitMovementDelta(
     dist >= 0.04 ||
     yawDiff >= 0.05 ||
     next.isSprinting !== prev.isSprinting ||
-    next.activeChapterId !== prev.activeChapterId
+    next.activeChapterId !== prev.activeChapterId ||
+    next.xp !== prev.xp ||
+    next.starsTotal !== prev.starsTotal
   );
 }
 
@@ -430,7 +583,11 @@ export function applyMultiplayerServerEvent(
     players.clear();
     for (const p of msg.players) {
       if (p.id !== msg.selfId) {
-        players.set(p.id, p);
+        players.set(p.id, {
+          ...p,
+          gender: sanitizeAvatarGender(p.gender),
+          appearance: sanitizeAvatarAppearance(p.appearance, sanitizeAvatarGender(p.gender)),
+        });
       }
     }
     const dedupedChats = msg.recentChats.slice(-50);
@@ -439,7 +596,12 @@ export function applyMultiplayerServerEvent(
 
   if (msg.type === "player:joined") {
     if (msg.player.id !== selfId) {
-      players.set(msg.player.id, msg.player);
+      const gender = sanitizeAvatarGender(msg.player.gender);
+      players.set(msg.player.id, {
+        ...msg.player,
+        gender,
+        appearance: sanitizeAvatarAppearance(msg.player.appearance, gender),
+      });
     }
     return { nextChats: chats, nextSelfId: selfId };
   }
@@ -461,6 +623,7 @@ export function applyMultiplayerServerEvent(
         id: msg.id,
         name: "Mahasiswa",
         colorHex: "#059669",
+        appearance: sanitizeAvatarAppearance(),
         x: msg.x,
         y: msg.y,
         z: msg.z,
@@ -478,9 +641,10 @@ export function applyMultiplayerServerEvent(
     if (msg.id !== selfId) {
       const existing = players.get(msg.id);
       if (existing) {
-        existing.name = msg.name;
-        existing.colorHex = msg.colorHex;
-        if (msg.gender) existing.gender = sanitizeAvatarGender(msg.gender);
+        existing.name = sanitizePlayerName(msg.name);
+        existing.colorHex = sanitizeColorHex(msg.colorHex);
+        existing.gender = sanitizeAvatarGender(msg.gender ?? existing.gender);
+        existing.appearance = sanitizeAvatarAppearance(msg.appearance ?? existing.appearance, existing.gender);
       }
     }
     return { nextChats: chats, nextSelfId: selfId };
@@ -1349,7 +1513,7 @@ export function pickQuizBattleQuestion(
   chapterFilter = "all",
   usedIds: string[] = [],
   seed = 0,
-): QuizBattleQuestion {
+): ServerQuizBattleQuestion {
   const normalizedFilter = chapterFilter === "all" ? "all" : sanitizeChapterId(chapterFilter);
   const byChapter =
     normalizedFilter === "all"

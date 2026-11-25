@@ -4,6 +4,7 @@ import {
   CAMERA_PRESETS,
   clampCameraDist,
   clampCameraPitch,
+  computeAdaptivePixelRatio,
   computeOrbitCameraFrame,
   computeResponsiveFov,
   getBehindPlayerCameraYaw,
@@ -28,6 +29,14 @@ test("computeResponsiveFov widens gracefully for portrait mobile screens", () =>
   assert.equal(computeResponsiveFov(390 / 844), 60);
   assert.equal(computeResponsiveFov(768 / 900), 54);
   assert.equal(computeResponsiveFov(1440 / 900), 48);
+});
+
+test("adaptive pixel ratio preserves quality while respecting performance bounds", () => {
+  assert.equal(computeAdaptivePixelRatio(2, 40, 0.85, 2), 1.85);
+  assert.equal(computeAdaptivePixelRatio(0.9, 12, 0.85, 1.5), 1);
+  assert.equal(computeAdaptivePixelRatio(1.25, 22, 0.85, 1.5), 1.25);
+  assert.equal(computeAdaptivePixelRatio(3, 40, 0.85, 1.5), 1.35);
+  assert.equal(computeAdaptivePixelRatio(Number.NaN, 22, 1, 1.5), 1.5);
 });
 
 test("computeOrbitCameraFrame rotates look-ahead with camera yaw and prevents underground clipping", () => {

@@ -83,7 +83,9 @@ interface GameHudProps {
   onScooter?: boolean;
   onToggleScooter?: () => void;
   avatarGender?: AvatarGender;
+  avatarStyleLabel?: string;
   onToggleAvatarGender?: () => void;
+  onOpenCharacterCustomization?: () => void;
   virtualMoveRef?: React.MutableRefObject<{ x: number; z: number }>;
   virtualSprintRef?: React.MutableRefObject<boolean>;
   jumpTriggerRef?: React.MutableRefObject<number>;
@@ -132,7 +134,9 @@ export const GameHud: React.FC<GameHudProps> = ({
   onScooter = false,
   onToggleScooter,
   avatarGender = "boy",
+  avatarStyleLabel,
   onToggleAvatarGender,
+  onOpenCharacterCustomization,
   virtualMoveRef,
   virtualSprintRef,
   jumpTriggerRef,
@@ -555,7 +559,7 @@ export const GameHud: React.FC<GameHudProps> = ({
     <div className="pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:p-4">
       <div className="flex flex-col items-stretch gap-1.5">
         {/* Slim Single-Row Top Edge: Essential Readout (Left) + Essential Actions (Right) */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
         {/* Top-Left Minimal Status Chip */}
         <div className="pointer-events-auto flex flex-col gap-1 rounded-xl border border-slate-300/85 bg-white/92 px-3 py-1.5 shadow-sm dark:border-slate-700/85 dark:bg-slate-900/92">
           <div className="flex items-center gap-2 whitespace-nowrap">
@@ -615,7 +619,6 @@ export const GameHud: React.FC<GameHudProps> = ({
           <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-300/85 bg-white/92 p-1 shadow-sm dark:border-slate-700/85 dark:bg-slate-900/92">
             <button
               type="button"
-              tabIndex={-1}
               onClick={(e) => {
                 e.currentTarget.blur();
                 setMenuOpen(false);
@@ -632,8 +635,7 @@ export const GameHud: React.FC<GameHudProps> = ({
             {onOpenMultiplayer && (
               <button
                 type="button"
-                tabIndex={-1}
-                data-testid="open-multiplayer-btn"
+                  data-testid="open-multiplayer-btn"
                 onClick={(e) => {
                   e.currentTarget.blur();
                   setMenuOpen(false);
@@ -662,7 +664,6 @@ export const GameHud: React.FC<GameHudProps> = ({
 
             <button
               type="button"
-              tabIndex={-1}
               data-testid="toggle-map-btn"
               onClick={(e) => {
                 e.currentTarget.blur();
@@ -683,7 +684,6 @@ export const GameHud: React.FC<GameHudProps> = ({
 
             <button
               type="button"
-              tabIndex={-1}
               data-testid="hud-menu-btn"
               onClick={(e) => {
                 e.currentTarget.blur();
@@ -739,8 +739,7 @@ export const GameHud: React.FC<GameHudProps> = ({
                 >
                   <button
                     type="button"
-                    tabIndex={-1}
-                    onClick={(e) => {
+                          onClick={(e) => {
                       e.currentTarget.blur();
                       onZoomCamera(-2.2);
                     }}
@@ -752,8 +751,7 @@ export const GameHud: React.FC<GameHudProps> = ({
                   </button>
                   <button
                     type="button"
-                    tabIndex={-1}
-                    data-testid="camera-preset-btn"
+                          data-testid="camera-preset-btn"
                     onClick={(e) => {
                       e.currentTarget.blur();
                       onCycleCameraPreset();
@@ -767,8 +765,7 @@ export const GameHud: React.FC<GameHudProps> = ({
                   </button>
                   <button
                     type="button"
-                    tabIndex={-1}
-                    onClick={(e) => {
+                          onClick={(e) => {
                       e.currentTarget.blur();
                       onZoomCamera(2.2);
                     }}
@@ -780,8 +777,7 @@ export const GameHud: React.FC<GameHudProps> = ({
                   </button>
                   <button
                     type="button"
-                    tabIndex={-1}
-                    data-testid="camera-reset-btn"
+                          data-testid="camera-reset-btn"
                     onClick={(e) => {
                       e.currentTarget.blur();
                       onResetCamera();
@@ -928,16 +924,16 @@ export const GameHud: React.FC<GameHudProps> = ({
                 </button>
               )}
 
-              {onToggleAvatarGender && (
+              {(onOpenCharacterCustomization || onToggleAvatarGender) && (
                 <button
                   type="button"
                   data-testid="hud-toggle-gender-btn"
-                  onClick={onToggleAvatarGender}
+                  onClick={onOpenCharacterCustomization ?? onToggleAvatarGender}
                   className="mt-2 flex min-h-[38px] w-full items-center justify-between gap-2 rounded-xl border border-pink-200 bg-pink-50/70 px-3 text-xs font-extrabold text-pink-950 hover:bg-pink-100 dark:border-pink-800/70 dark:bg-pink-950/40 dark:text-pink-200"
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 text-pink-600 dark:text-pink-400" />
-                    Karakter: {avatarGender === "girl" ? "Cewe Imut" : "Cowo Keren"}
+                    Karakter: {avatarStyleLabel ?? (avatarGender === "girl" ? "Cewe Imut" : "Cowo Keren")}
                   </span>
                   <span className="text-[10px] font-bold text-pink-700 dark:text-pink-300">
                     Ganti
@@ -1557,7 +1553,6 @@ export const GameHud: React.FC<GameHudProps> = ({
           {onToggleScooter && (
             <button
               type="button"
-              tabIndex={-1}
               data-testid="toggle-scooter-btn"
               onClick={(e) => {
                 e.currentTarget.blur();
@@ -1579,7 +1574,6 @@ export const GameHud: React.FC<GameHudProps> = ({
           {onSendSocialEmote && (
             <button
               type="button"
-              tabIndex={-1}
               data-testid="toggle-emote-btn"
               onClick={(e) => {
                 e.currentTarget.blur();

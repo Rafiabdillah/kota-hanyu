@@ -8,7 +8,9 @@ import {
   sanitizeChatText,
   sanitizeColorHex,
   sanitizePlayerName,
+  sanitizeProgressUpdate,
   sanitizeRoomId,
+  serializeMiniGameSnapshot,
   shouldEmitMovementDelta,
   type AvatarGender,
   type ChatStudyCard,
@@ -22,6 +24,7 @@ import {
   type SharedBallState,
   type SocialEmoteKind,
 } from "./multiplayer";
+import { sanitizeAvatarAppearance, type AvatarAppearance } from "./avatar";
 import { SOCCER_FIELD_CENTER } from "./worldLayout";
 
 export type MultiplayerStatus = "disconnected" | "connecting" | "connected" | "reconnecting";
@@ -30,10 +33,12 @@ export interface MultiplayerProfile {
   name: string;
   colorHex: string;
   gender: AvatarGender;
+  appearance: AvatarAppearance;
   roomId: string;
 }
 
-const MP_PROFILE_STORAGE_KEY = "hanyu_mp_profile_v1";
+const MP_PROFILE_STORAGE_KEY = "hanyu_mp_profile_v2";
+const LEGACY_MP_PROFILE_STORAGE_KEY = "hanyu_mp_profile_v1";
 
 function defaultColorForName(name: string): string {
   let hash = 0;
@@ -44,51 +49,54 @@ function defaultColorForName(name: string): string {
 }
 
 export function loadMultiplayerProfile(): MultiplayerProfile {
+  const fallback: MultiplayerProfile = {
+    name: "Rafi",
+    colorHex: PLAYER_JACKET_COLORS[0].hex,
+    gender: "boy",
+    appearance: sanitizeAvatarAppearance(),
+    roomId: DEFAULT_MULTIPLAYER_ROOM,
+  };
+  if (typeof window === "undefined") return fallback;
+
   try {
-    if (typeof window === "undefined") {
-      return {
-        name: "Rafi",
-        colorHex: PLAYER_JACKET_COLORS[0].hex,
-        gender: "boy",
-        roomId: DEFAULT_MULTIPLAYER_ROOM,
-      };
+    const parsed: Partial<MultiplayerProfile> = {};
+    for (const key of [LEGACY_MP_PROFILE_STORAGE_KEY, MP_PROFILE_STORAGE_KEY]) {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        Object.assign(parsed, JSON.parse(raw));
+      } catch {
+        continue;
+      }
     }
     const urlParams = new URLSearchParams(window.location.search);
-    const urlRoom = urlParams.get("room");
-    const urlName = urlParams.get("name");
-    const urlGender = urlParams.get("gender");
-    const raw = window.localStorage.getItem(MP_PROFILE_STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Partial<MultiplayerProfile>) : {};
-    const resolvedName = sanitizePlayerName(urlName || parsed.name || "Rafi");
-    const resolvedGender = sanitizeAvatarGender(urlGender || parsed.gender);
-
+    const resolvedName = sanitizePlayerName(urlParams.get("name") || parsed.name || "Rafi");
+    const resolvedGender = sanitizeAvatarGender(urlParams.get("gender") || parsed.gender);
     return {
       name: resolvedName,
       colorHex: sanitizeColorHex(
         parsed.colorHex || (resolvedGender === "girl" ? "#ec4899" : defaultColorForName(resolvedName)),
       ),
       gender: resolvedGender,
-      roomId: sanitizeRoomId(urlRoom || parsed.roomId || DEFAULT_MULTIPLAYER_ROOM),
+      appearance: sanitizeAvatarAppearance(parsed.appearance, resolvedGender),
+      roomId: sanitizeRoomId(urlParams.get("room") || parsed.roomId || DEFAULT_MULTIPLAYER_ROOM),
     };
   } catch {
-    return {
-      name: "Rafi",
-      colorHex: PLAYER_JACKET_COLORS[0].hex,
-      gender: "boy",
-      roomId: DEFAULT_MULTIPLAYER_ROOM,
-    };
+    return fallback;
   }
 }
 
 export function saveMultiplayerProfile(profile: MultiplayerProfile): void {
   try {
     if (typeof window === "undefined") return;
+    const gender = sanitizeAvatarGender(profile.gender);
     window.localStorage.setItem(
       MP_PROFILE_STORAGE_KEY,
       JSON.stringify({
         name: sanitizePlayerName(profile.name),
         colorHex: sanitizeColorHex(profile.colorHex),
-        gender: sanitizeAvatarGender(profile.gender),
+        gender,
+        appearance: sanitizeAvatarAppearance(profile.appearance, gender),
         roomId: sanitizeRoomId(profile.roomId),
       }),
     );
@@ -157,6 +165,7 @@ export class CampusMultiplayerClient {
       name: sanitizePlayerName(profile.name),
       colorHex: sanitizeColorHex(profile.colorHex),
       gender: sanitizeAvatarGender(profile.gender),
+      appearance: sanitizeAvatarAppearance(profile.appearance, sanitizeAvatarGender(profile.gender)),
       roomId: sanitizeRoomId(profile.roomId),
     };
     this.roomId = this.profile.roomId;
@@ -195,6 +204,9 @@ export class CampusMultiplayerClient {
       name: this.profile.name,
       color: this.profile.colorHex,
       gender: this.profile.gender,
+      style: this.profile.appearance.styleId,
+      hair: this.profile.appearance.hairColor,
+      skin: this.profile.appearance.skinTone,
     });
     const url = `${proto}//${window.location.host}/multiplayer?${params.toString()}`;
 
@@ -228,14 +240,14 @@ export class CampusMultiplayerClient {
 
         if (msg.type === "world:init") {
           this.roomId = msg.roomId;
-          this.minigame = msg.minigame ?? null;
+          this.minigame = serializeMiniGameSnapshot(msg.minigame ?? null);
           if (msg.ball) {
             this.ball = msg.ball;
             this.callbacks.onBallUpdate?.(this.ball);
           }
           this.callbacks.onMiniGameState?.(this.minigame);
         } else if (msg.type === "minigame:state") {
-          this.minigame = msg.minigame;
+          this.minigame = serializeMiniGameSnapshot(msg.minigame);
           this.callbacks.onMiniGameState?.(this.minigame);
         } else if (msg.type === "minigame:event") {
           this.callbacks.onMiniGameEvent?.(msg.notice);
@@ -321,16 +333,16 @@ export class CampusMultiplayerClient {
 
     const coords = clampWorldCoords(input.x, input.y, input.z, input.yaw);
     const safeChapterId = sanitizeChapterId(input.activeChapterId);
-    const safeXp = Number.isFinite(input.xp) ? Math.max(0, Math.round(input.xp)) : 0;
-    const safeStars = Number.isFinite(input.starsTotal)
-      ? Math.max(0, Math.min(21, Math.round(input.starsTotal)))
-      : 0;
+    const progress = sanitizeProgressUpdate(
+      this.lastEmitSnapshot ?? { xp: 0, starsTotal: 0 },
+      input.xp,
+      input.starsTotal,
+    );
     const nextSnapshot = {
       ...coords,
-      isSprinting: Boolean(input.isSprinting),
+      isSprinting: input.isSprinting === true,
       activeChapterId: safeChapterId,
-      xp: safeXp,
-      starsTotal: safeStars,
+      ...progress,
     };
 
     if (!shouldEmitMovementDelta(this.lastEmitSnapshot, nextSnapshot, now - this.lastEmitAt)) {
@@ -350,9 +362,16 @@ export class CampusMultiplayerClient {
     const cleanName = sanitizePlayerName(next.name);
     const cleanColor = sanitizeColorHex(next.colorHex);
     const cleanGender = sanitizeAvatarGender(next.gender);
+    const cleanAppearance = sanitizeAvatarAppearance(next.appearance, cleanGender);
     const roomChanged = cleanRoom !== this.profile.roomId;
 
-    this.profile = { name: cleanName, colorHex: cleanColor, gender: cleanGender, roomId: cleanRoom };
+    this.profile = {
+      name: cleanName,
+      colorHex: cleanColor,
+      gender: cleanGender,
+      appearance: cleanAppearance,
+      roomId: cleanRoom,
+    };
     saveMultiplayerProfile(this.profile);
 
     if (roomChanged) {
@@ -375,6 +394,7 @@ export class CampusMultiplayerClient {
       name: cleanName,
       colorHex: cleanColor,
       gender: cleanGender,
+      appearance: cleanAppearance,
     });
   }
 

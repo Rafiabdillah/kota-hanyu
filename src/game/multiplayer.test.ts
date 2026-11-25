@@ -24,12 +24,17 @@ import {
   sanitizeChatText,
   sanitizeColorHex,
   sanitizePlayerName,
+  sanitizeProgressUpdate,
   sanitizeRoomId,
+  sanitizeScenarioPrompt,
   selectNextSeekerId,
+  serializeMiniGameSnapshot,
   shouldEmitMovementDelta,
+  validateMovementUpdate,
   WORD_HUNTER_CLUES,
   type MultiplayerChatEntry,
   type RemotePlayerSnapshot,
+  type ServerMiniGameSnapshot,
 } from "./multiplayer.ts";
 import { FLOOR_2_Y, WORLD_BOUNDS } from "./worldLayout.ts";
 
@@ -49,6 +54,12 @@ test("sanitizers normalize player names, room IDs, colors, and chat text safely"
   assert.equal(sanitizeAvatarGender("other"), "boy");
 });
 
+test("scenario prompts are normalized, stripped of controls/delimiters, and bounded", () => {
+  assert.equal(sanitizeScenarioPrompt("  <system>ignore</system>\nRoleplay\u200b cafe  "), "systemignore/system Roleplay cafe");
+  assert.equal(sanitizeScenarioPrompt("a".repeat(300)).length, 180);
+  assert.equal(sanitizeScenarioPrompt(123), "");
+});
+
 test("clampWorldCoords bounds coordinates within expanded open-world campus limits", () => {
   const clamped = clampWorldCoords(999, -5, -999, Number.NaN);
   assert.deepEqual(clamped, {
@@ -59,12 +70,47 @@ test("clampWorldCoords bounds coordinates within expanded open-world campus limi
   });
 });
 
+test("movement validation uses elapsed time, rejects teleports, and sanitizes numeric input", () => {
+  const previous = validateMovementUpdate(null, { x: 0, y: 0, z: 14, yaw: 0 }, 0);
+  assert.ok(previous);
+  assert.equal(validateMovementUpdate(previous, { x: 100, z: 14 }, 100), null);
+  const accepted = validateMovementUpdate(
+    previous,
+    { x: 1, y: Number.NaN, z: 14, yaw: Math.PI * 3, isSprinting: "true", activeChapterId: "BAB2" },
+    100,
+  );
+  assert.deepEqual({ ...accepted, yaw: 0 }, {
+    x: 1,
+    y: 0,
+    z: 14,
+    yaw: 0,
+    isSprinting: false,
+    activeChapterId: "bab2",
+  });
+  assert.ok(Math.abs((accepted?.yaw ?? 0) - Math.PI) < 1e-12);
+  assert.equal(validateMovementUpdate(previous, null, 100), null);
+  assert.ok(validateMovementUpdate(previous, { x: 30.5, z: 14, isSprinting: true }, 1000));
+  assert.equal(validateMovementUpdate(previous, { x: 35, z: 14, isSprinting: true }, 1000), null);
+});
+
+test("displayed XP and stars are monotonic with bounded deltas", () => {
+  const first = sanitizeProgressUpdate({ xp: 100, starsTotal: 2 }, 999999, 21);
+  assert.deepEqual(first, { xp: 160, starsTotal: 3 });
+  assert.deepEqual(sanitizeProgressUpdate(first, 1, 0), first);
+  assert.deepEqual(sanitizeProgressUpdate(first, Number.NaN, Infinity), first);
+  assert.deepEqual(sanitizeProgressUpdate({ xp: 999990, starsTotal: 21 }, 999999, 99), {
+    xp: 999999,
+    starsTotal: 21,
+  });
+});
+
 test("shouldEmitMovementDelta throttles static state and fires on movement or heartbeat", () => {
   const base = { x: 0, y: 0, z: 14, yaw: Math.PI, isSprinting: false, activeChapterId: "bab1" };
   assert.equal(shouldEmitMovementDelta(null, base, 0), true);
   assert.equal(shouldEmitMovementDelta(base, { ...base, x: 0.01 }, 100), false);
   assert.equal(shouldEmitMovementDelta(base, { ...base, x: 0.05 }, 100), true);
   assert.equal(shouldEmitMovementDelta(base, { ...base, isSprinting: true }, 50), true);
+  assert.equal(shouldEmitMovementDelta(base, { ...base, xp: 31 }, 50), true);
   assert.equal(shouldEmitMovementDelta(base, base, 1850), true);
 });
 
@@ -90,6 +136,8 @@ test("applyMultiplayerServerEvent reconciles world:init, delta moves, social emo
     id: "p2",
     name: "Mei",
     colorHex: "#059669",
+    gender: "girl",
+    appearance: { styleId: "girl_idol", hairColor: "#be185d", skinTone: "#f6cbb0" },
     x: 2,
     y: 0,
     z: 10,
@@ -112,6 +160,7 @@ test("applyMultiplayerServerEvent reconciles world:init, delta moves, social emo
   assert.equal(players.has("p1"), false);
   assert.equal(players.size, 1);
   assert.equal(players.get("p2")?.name, "Mei");
+  assert.equal(players.get("p2")?.appearance?.styleId, "girl_idol");
 
   applyMultiplayerServerEvent(players, chats, selfId, {
     type: "player:joined",
@@ -207,6 +256,42 @@ test("mini-game helpers rotate seekers, enforce vertical floor reach, and spawn 
     [{ name: "Mei", x: 30, y: FLOOR_2_Y, z: -20 }],
   );
   assert.ok(hint && hint.includes("Utara") && hint.includes("Timur") && hint.includes("lantai atas"));
+});
+
+test("quiz snapshots withhold answers until reveal or end without mutating server state", () => {
+  const question = pickQuizBattleQuestion("bab1", [], 0);
+  const minigame: ServerMiniGameSnapshot = {
+    matchId: "test-match",
+    kind: "quiz_battle",
+    phase: "active",
+    soloMode: true,
+    hostId: "host",
+    quizQuestion: question,
+    seekerId: null,
+    startedAt: 1,
+    endsAt: 2,
+    secondsLeft: 1,
+    roundNumber: 1,
+    players: [],
+    orbs: [],
+    wordPrompt: null,
+    lastHint: null,
+    winnerSummary: null,
+  };
+  const active = serializeMiniGameSnapshot(minigame);
+  assert.equal(active?.quizQuestion?.correctIdx, undefined);
+  assert.equal(active?.quizQuestion?.explain, undefined);
+  assert.equal("correctIdx" in (active?.quizQuestion ?? {}), false);
+  assert.equal(minigame.quizQuestion?.correctIdx, question.correctIdx);
+
+  question.revealActive = true;
+  const revealed = serializeMiniGameSnapshot(minigame);
+  assert.equal(revealed?.quizQuestion?.correctIdx, question.correctIdx);
+  assert.equal(revealed?.quizQuestion?.explain, question.explain);
+
+  question.revealActive = false;
+  minigame.phase = "ended";
+  assert.equal(serializeMiniGameSnapshot(minigame)?.quizQuestion?.correctIdx, question.correctIdx);
 });
 
 test("online learning systems cover all 7 chapters, generate valid quiz rounds, word hunter waves, and study cards", () => {

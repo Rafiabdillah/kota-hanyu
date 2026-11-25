@@ -10,6 +10,7 @@ interface LiveVoiceLabProps {
   initialChapterId: string;
   muted?: boolean;
   naturalTtsEnabled?: boolean;
+  voiceRewardsRemaining: number;
   onClose: () => void;
   onTurnAwardXp: () => void;
 }
@@ -108,6 +109,7 @@ export const LiveVoiceLab: React.FC<LiveVoiceLabProps> = ({
   initialChapterId,
   muted = false,
   naturalTtsEnabled = true,
+  voiceRewardsRemaining,
   onClose,
   onTurnAwardXp,
 }) => {
@@ -385,6 +387,8 @@ export const LiveVoiceLab: React.FC<LiveVoiceLabProps> = ({
                     <button
                       type="button"
                       onClick={handleToggleMicMute}
+                      aria-pressed={micMuted}
+                      aria-label={micMuted ? "Aktifkan mikrofon" : "Bisukan mikrofon"}
                       className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold text-white ${
                         micMuted ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-700 hover:bg-blue-800"
                       }`}
@@ -433,6 +437,12 @@ export const LiveVoiceLab: React.FC<LiveVoiceLabProps> = ({
               </span>
             )}
           </div>
+
+          <p role="status" className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+            {voiceRewardsRemaining > 0
+              ? `Bonus +15 XP tersedia untuk ${voiceRewardsRemaining} giliran berikutnya hari ini.`
+              : "Bonus XP suara hari ini sudah mencapai batas. Percakapan dapat dilanjutkan tanpa XP tambahan."}
+          </p>
 
           <div
             data-testid="live-status-banner"
@@ -527,6 +537,7 @@ export const LiveVoiceLab: React.FC<LiveVoiceLabProps> = ({
           <form onSubmit={handleSendText} className="flex items-center gap-2">
             <input
               type="text"
+              aria-label="Kirim kalimat Mandarin kepada Lǎoshī Lín"
               disabled={status !== "connected"}
               value={textDraft}
               onChange={(e) => setTextDraft(e.target.value)}
