@@ -59,6 +59,8 @@ const MAX_LIVE_CONNECTIONS = IS_LOCAL_DEV ? 120 : 60;
 const MAX_WS_PER_IP = IS_LOCAL_DEV ? 40 : 8;
 const MAX_LIVE_PER_IP = IS_LOCAL_DEV ? 20 : 3;
 const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY || 0);
+const LIVE_MODEL = "gemini-3.8-live";
+const LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 
 function positiveIntEnv(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -106,7 +108,7 @@ const ttsRateLimiter = new FixedWindowRateLimiter(
   60_000,
 );
 const liveUpgradeLimiter = new FixedWindowRateLimiter(
-  positiveIntEnv("LIVE_RATE_LIMIT_PER_IP", IS_LOCAL_DEV ? 120 : 12),
+  positiveIntEnv("LIVE_RATE_LIMIT_PER_IP", IS_LOCAL_DEV ? 120 : 4),
   60_000,
 );
 const multiplayerUpgradeLimiter = new FixedWindowRateLimiter(
@@ -158,6 +160,10 @@ function isAllowedOrigin(req: http.IncomingMessage): boolean {
   } catch {
     return false;
   }
+}
+
+function safeLiveError(value: string, apiKey: string): string {
+  return value.replaceAll(apiKey, "[redacted]").replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]");
 }
 
 function rejectUpgrade(
@@ -300,7 +306,7 @@ async function startServer() {
       ok: true,
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"),
       liveModel: "gemini-3.8-live",
-      ttsModel: "gemini-3.8-flash-lite-tts",
+      ttsModel: "gemini-3.8-flash-tts",
     });
   });
 
@@ -361,7 +367,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash-lite-tts",
+        model: "gemini-3.8-flash-tts",
         contents: [
           {
             role: "user",
@@ -405,9 +411,100 @@ async function startServer() {
           : msg.includes("\"code\":429") || msg.includes("429")
             ? 429
             : 500;
-      res.status(upstreamStatus).json({ error: msg });
+      res.status(upstreamStatus).json({ error: safeLiveError(msg, apiKey) });
     } finally {
       ttsInFlight = Math.max(0, ttsInFlight - 1);
+    }
+  });
+
+  app.get("/api/live-token", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (!isAllowedOrigin(req)) {
+      res.status(403).json({ error: "Origin tidak diizinkan." });
+      return;
+    }
+    const ip = getClientIp(req);
+    if (!liveUpgradeLimiter.take(ip)) {
+      res.set("Retry-After", String(liveUpgradeLimiter.retryAfterSeconds(ip)));
+      res.status(429).json({ error: "Terlalu banyak permintaan sesi Live. Coba lagi nanti." });
+      return;
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+      res.status(503).json({ error: "GEMINI_API_KEY belum tersedia." });
+      return;
+    }
+
+    const chapterId = sanitizeChapterId(
+      typeof req.query.chapter === "string" ? req.query.chapter : undefined,
+    );
+    const scenario = sanitizeScenarioPrompt(req.query.scenario) || undefined;
+    const setup = {
+      model: `models/${LIVE_MODEL}`,
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        temperature: 1,
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
+      },
+      realtimeInputConfig: {
+        automaticActivityDetection: {
+          disabled: false,
+          silenceDurationMs: 2000,
+          prefixPaddingMs: 500,
+          endOfSpeechSensitivity: "END_SENSITIVITY_UNSPECIFIED",
+          startOfSpeechSensitivity: "START_SENSITIVITY_UNSPECIFIED",
+        },
+        activityHandling: "ACTIVITY_HANDLING_UNSPECIFIED",
+        turnCoverage: "TURN_INCLUDES_ONLY_ACTIVITY",
+      },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      systemInstruction: { parts: [{ text: buildSystemInstruction(chapterId, scenario) }] },
+    };
+    const expireTime = new Date(Date.now() + 30 * 60_000).toISOString();
+    const newSessionExpireTime = new Date(Date.now() + 60_000).toISOString();
+
+    try {
+      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          uses: 1,
+          expireTime,
+          newSessionExpireTime,
+          bidiGenerateContentSetup: setup,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        res.status(response.status === 429 ? 429 : 502).json({
+          error: safeLiveError(detail || "Gagal membuat sesi Gemini Live.", apiKey),
+        });
+        return;
+      }
+      const token = await response.json() as { name?: string };
+      if (!token.name) {
+        res.status(502).json({ error: "Gemini Live tidak mengembalikan token sesi." });
+        return;
+      }
+      const liveUrl = new URL(LIVE_URL);
+      liveUrl.searchParams.set("access_token", token.name);
+      res.json({
+        url: liveUrl.toString(),
+        setup: { setup },
+        model: LIVE_MODEL,
+        chapterId,
+        expiresAt: expireTime,
+      });
+    } catch (error) {
+      res.status(502).json({
+        error: safeLiveError(
+          error instanceof Error ? error.message : "Gagal membuat sesi Gemini Live.",
+          apiKey,
+        ),
+      });
     }
   });
 

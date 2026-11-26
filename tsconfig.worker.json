@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2022"],
+    "noEmit": true
+  },
+  "include": ["cloudflare/**/*.ts", "src/game/multiplayer.ts", "src/game/avatar.ts", "src/game/worldLayout.ts"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -60,12 +60,25 @@ export class GeminiLiveVoiceClient {
     this.receivedError = false;
     callbacks.onStatus("connecting", "Menghubungkan ke Lǎoshī Lín (gemini-3.8-live)...");
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({ chapter: chapterId });
     if (scenario) params.set("scenario", scenario);
-    const wsUrl = `${protocol}//${window.location.host}/live?${params.toString()}`;
+    let response: Response;
+    let session: { url?: string; setup?: { setup?: unknown }; error?: string };
+    try {
+      response = await fetch(`/api/live-token?${params.toString()}`, {
+        headers: { Accept: "application/json" },
+      });
+      session = await response.json() as typeof session;
+    } catch {
+      callbacks.onStatus("error", "Gagal membuat sesi Gemini Live. Periksa koneksi internet.");
+      return;
+    }
+    if (!response.ok || !session.url || !session.setup?.setup) {
+      callbacks.onStatus("error", session.error || "Gagal membuat sesi Gemini Live.");
+      return;
+    }
 
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(session.url);
     this.ws = ws;
 
     this.outputCtx = new AudioContext({ sampleRate: 24000 });
@@ -74,35 +87,49 @@ export class GeminiLiveVoiceClient {
     this.outputAnalyser.connect(this.outputCtx.destination);
     this.nextStartTime = this.outputCtx.currentTime;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data as string) as {
-          type?: string;
-          audio?: string;
-          text?: string;
-          message?: string;
-        };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(session.setup));
+    };
 
-        if (msg.type === "ready") {
+    ws.onmessage = async (event) => {
+      try {
+        const raw = event.data instanceof Blob
+          ? await event.data.text()
+          : event.data instanceof ArrayBuffer
+            ? new TextDecoder().decode(event.data)
+            : event.data;
+        const msg = JSON.parse(raw as string) as {
+          setupComplete?: unknown;
+          serverContent?: {
+            inputTranscription?: { text?: string };
+            outputTranscription?: { text?: string };
+            modelTurn?: { parts?: { inlineData?: { data?: string } }[] };
+            interrupted?: boolean;
+            turnComplete?: boolean;
+          };
+          error?: { message?: string };
+        };
+        const content = msg.serverContent;
+
+        if (msg.setupComplete) {
           callbacks.onStatus("connected", "Terhubung! Mulai bicara bahasa Mandarin atau ketik pesan.");
-        } else if (msg.type === "inputTranscript" && msg.text) {
-          callbacks.onInputTranscript(msg.text);
-        } else if (msg.type === "outputTranscript" && msg.text) {
-          callbacks.onOutputTranscript(msg.text);
-        } else if (msg.type === "audio" && msg.audio) {
-          this.schedulePcmPlayback(msg.audio);
-        } else if (msg.type === "interrupted") {
-          this.stopQueuedPlayback();
-        } else if (msg.type === "turnComplete") {
-          callbacks.onTurnComplete?.();
-        } else if (msg.type === "error") {
-          this.receivedError = true;
-          callbacks.onStatus("error", msg.message || "Terjadi kesalahan pada sesi Gemini Live.");
-        } else if (msg.type === "closed") {
-          if (!this.receivedError) {
-            callbacks.onStatus("closed", "Sesi Live ditutup.");
-          }
         }
+        if (content?.inputTranscription?.text) {
+          callbacks.onInputTranscript(content.inputTranscription.text);
+        }
+        if (content?.outputTranscription?.text) {
+          callbacks.onOutputTranscript(content.outputTranscription.text);
+        }
+        if (msg.error?.message) {
+          this.receivedError = true;
+          callbacks.onStatus("error", msg.error.message);
+        }
+
+        for (const part of content?.modelTurn?.parts ?? []) {
+          if (part.inlineData?.data) this.schedulePcmPlayback(part.inlineData.data);
+        }
+        if (content?.interrupted) this.stopQueuedPlayback();
+        if (content?.turnComplete) callbacks.onTurnComplete?.();
       } catch {
         // ignore parse errors
       }
@@ -118,7 +145,7 @@ export class GeminiLiveVoiceClient {
       if (ev.code === 1008) {
         callbacks.onStatus(
           "error",
-          "GEMINI_API_KEY belum dikonfigurasi di server. Tambahkan secret untuk percakapan suara Live.",
+          "Sesi Live ditolak atau token kedaluwarsa. Silakan hubungkan kembali.",
         );
       } else {
         callbacks.onStatus("closed", "Koneksi suara selesai.");
@@ -145,7 +172,9 @@ export class GeminiLiveVoiceClient {
 
       if (this.micMuted || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       const base64 = float32ToPcmBase64(samples);
-      this.ws.send(JSON.stringify({ audio: base64 }));
+      this.ws.send(JSON.stringify({
+        realtimeInput: { audio: { data: base64, mimeType: "audio/pcm;rate=16000" } },
+      }));
     };
 
     this.sourceNode.connect(this.processor);
@@ -176,7 +205,11 @@ export class GeminiLiveVoiceClient {
 
   sendTextPrompt(text: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({ text }));
+    const cleanText = text.trim().slice(0, 500);
+    if (!cleanText) return;
+    this.ws.send(JSON.stringify({
+      clientContent: { turns: [{ role: "user", parts: [{ text: cleanText }] }], turnComplete: true },
+    }));
   }
 
   private schedulePcmPlayback(base64Audio: string): void {
