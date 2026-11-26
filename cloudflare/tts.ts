@@ -4,7 +4,8 @@ interface TtsEnv {
   TTS_MAX_CONCURRENCY?: string;
 }
 
-const ttsCache = new Map<string, string>();
+const TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"] as const;
+const ttsCache = new Map<string, { audio: string; model: string }>();
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 let ttsInFlight = 0;
 
@@ -39,7 +40,8 @@ export function handleHealth(env: TtsEnv): Response {
     ok: true,
     geminiConfigured: Boolean(env.GEMINI_API_KEY && env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"),
     liveModel: "gemini-3.8-live",
-    ttsModel: "gemini-3.8-flash-tts",
+    ttsModel: TTS_MODELS[0],
+    ttsFallbackModel: TTS_MODELS[1],
   });
 }
 
@@ -97,7 +99,7 @@ export async function handleTts(request: Request, env: TtsEnv): Promise<Response
   const cacheKey = `${paceStyle}::${rawText}`;
   const cached = ttsCache.get(cacheKey);
   if (cached) {
-    return json({ audioBase64: cached, mimeType: "audio/wav", cached: true });
+    return json({ audioBase64: cached.audio, mimeType: "audio/wav", cached: true, model: cached.model });
   }
 
   const maxConcurrency = positiveInt(env.TTS_MAX_CONCURRENCY, 6);
@@ -107,47 +109,62 @@ export async function handleTts(request: Request, env: TtsEnv): Promise<Response
 
   ttsInFlight += 1;
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash-tts:generateContent",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [{
-            role: "user",
-            parts: [{
-              text: rawText,
-              speechMetadata: {
-                style: `Mandarin Chinese language instructor Lǎoshī Lín speaking in ${paceStyle}`,
+    let lastError = "Model TTS gagal membuat audio.";
+    let lastStatus = 502;
+    for (const model of TTS_MODELS) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify({
+              contents: [{
+                role: "user",
+                parts: [{
+                  text: rawText,
+                  ...(model === TTS_MODELS[0] ? {
+                    speechMetadata: {
+                      style: `Mandarin Chinese language instructor Lǎoshī Lín speaking in ${paceStyle}`,
+                    },
+                  } : {}),
+                }],
+              }],
+              generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
               },
-            }],
-          }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } },
+            }),
           },
-        }),
-      },
-    );
-    if (!response.ok) {
-      const message = await response.text();
-      return json({ error: safeGeminiError(message || "Model TTS gagal membuat audio.", apiKey) }, response.status === 429 ? 429 : 502);
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          lastError = safeGeminiError(message || "Model TTS gagal membuat audio.", apiKey);
+          if (response.status === 429) {
+            lastStatus = 429;
+            continue;
+          }
+          return json({ error: lastError }, 502);
+        }
+        const payload = await response.json() as {
+          candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[];
+        };
+        const audio = payload.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (!audio) {
+          lastError = "Model TTS tidak mengembalikan data audio.";
+          continue;
+        }
+        if (ttsCache.size >= 80) {
+          const oldest = ttsCache.keys().next().value;
+          if (oldest) ttsCache.delete(oldest);
+        }
+        ttsCache.set(cacheKey, { audio, model });
+        return json({ audioBase64: audio, mimeType: "audio/wav", cached: false, model });
+      } catch (error) {
+        lastError = safeGeminiError(error instanceof Error ? error.message : "Gagal membuat audio TTS.", apiKey);
+      }
     }
-    const payload = await response.json() as {
-      candidates?: { content?: { parts?: { inlineData?: { data?: string } }[] } }[];
-    };
-    const audio = payload.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!audio) {
-      return json({ error: "Model TTS tidak mengembalikan data audio." }, 502);
-    }
-    if (ttsCache.size >= 80) {
-      const oldest = ttsCache.keys().next().value;
-      if (oldest) ttsCache.delete(oldest);
-    }
-    ttsCache.set(cacheKey, audio);
-    return json({ audioBase64: audio, mimeType: "audio/wav", cached: false });
-  } catch (error) {
-    return json({ error: safeGeminiError(error instanceof Error ? error.message : "Gagal membuat audio TTS.", apiKey) }, 502);
+    return json({ error: lastError }, lastStatus);
   } finally {
     ttsInFlight = Math.max(0, ttsInFlight - 1);
   }

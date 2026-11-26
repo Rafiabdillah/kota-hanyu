@@ -61,6 +61,7 @@ const MAX_LIVE_PER_IP = IS_LOCAL_DEV ? 20 : 3;
 const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY || 0);
 const LIVE_MODEL = "gemini-3.8-live";
 const LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
+const TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"] as const;
 
 function positiveIntEnv(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -290,7 +291,7 @@ function buildSystemInstruction(chapterId: string, scenario?: string): string {
     .join("\n");
 }
 
-const ttsCache = new Map<string, string>();
+const ttsCache = new Map<string, { audio: string; model: string }>();
 const MAX_TTS_CACHE = 80;
 let ttsInFlight = 0;
 
@@ -306,7 +307,8 @@ async function startServer() {
       ok: true,
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"),
       liveModel: "gemini-3.8-live",
-      ttsModel: "gemini-3.8-flash-tts",
+      ttsModel: TTS_MODELS[0],
+      ttsFallbackModel: TTS_MODELS[1],
     });
   });
 
@@ -348,7 +350,7 @@ async function startServer() {
     const cacheKey = `${paceStyle}::${rawText}`;
     const cached = ttsCache.get(cacheKey);
     if (cached) {
-      res.json({ audioBase64: cached, mimeType: "audio/wav", cached: true });
+      res.json({ audioBase64: cached.audio, mimeType: "audio/wav", cached: true, model: cached.model });
       return;
     }
 
@@ -366,52 +368,67 @@ async function startServer() {
         httpOptions: { headers: { "User-Agent": "aistudio-build" } },
       });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash-tts",
-        contents: [
-          {
-            role: "user",
-            parts: [
+      let lastError = "Model TTS gagal membuat audio.";
+      let lastStatus = 500;
+      for (const model of TTS_MODELS) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [
               {
-                text: rawText,
-                speechMetadata: {
-                  style: `Mandarin Chinese language instructor Lǎoshī Lín speaking in ${paceStyle}`,
-                },
+                role: "user",
+                parts: [
+                  {
+                    text: rawText,
+                    ...(model === TTS_MODELS[0] ? {
+                      speechMetadata: {
+                        style: `Mandarin Chinese language instructor Lǎoshī Lín speaking in ${paceStyle}`,
+                      },
+                    } : {}),
+                  },
+                ],
               },
             ],
-          },
-        ],
-        config: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: "Kore" },
+            config: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Kore" },
+                },
+              },
             },
-          },
-        },
-      });
+          });
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!base64Audio) {
-        res.status(502).json({ error: "Model TTS tidak mengembalikan data audio." });
-        return;
-      }
+          const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          if (!base64Audio) {
+            lastError = "Model TTS tidak mengembalikan data audio.";
+            continue;
+          }
 
-      if (ttsCache.size >= MAX_TTS_CACHE) {
-        const firstKey = ttsCache.keys().next().value;
-        if (firstKey !== undefined) ttsCache.delete(firstKey);
+          if (ttsCache.size >= MAX_TTS_CACHE) {
+            const firstKey = ttsCache.keys().next().value;
+            if (firstKey !== undefined) ttsCache.delete(firstKey);
+          }
+          ttsCache.set(cacheKey, { audio: base64Audio, model });
+          res.json({ audioBase64: base64Audio, mimeType: "audio/wav", cached: false, model });
+          return;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : "Gagal membuat audio TTS.";
+          lastError = safeLiveError(msg, apiKey);
+          const upstreamStatus =
+            typeof (err as { status?: unknown })?.status === "number"
+              ? (err as { status: number }).status
+              : msg.includes("\"code\":429") || msg.includes("429")
+                ? 429
+                : 500;
+          lastStatus = upstreamStatus;
+          if (upstreamStatus !== 429) {
+            res.status(upstreamStatus).json({ error: lastError });
+            return;
+          }
+        }
       }
-      ttsCache.set(cacheKey, base64Audio);
-      res.json({ audioBase64: base64Audio, mimeType: "audio/wav", cached: false });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Gagal membuat audio TTS.";
-      const upstreamStatus =
-        typeof (err as { status?: unknown })?.status === "number"
-          ? ((err as { status: number }).status)
-          : msg.includes("\"code\":429") || msg.includes("429")
-            ? 429
-            : 500;
-      res.status(upstreamStatus).json({ error: safeLiveError(msg, apiKey) });
+      res.status(lastStatus).json({ error: lastError });
     } finally {
       ttsInFlight = Math.max(0, ttsInFlight - 1);
     }
